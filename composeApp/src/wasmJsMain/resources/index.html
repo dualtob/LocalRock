@@ -35,8 +35,11 @@
            contain: paint makes #app the box that Compose's fixed-position elements are placed in
            and clipped to. Compose 1.12 sizes one of its (invisible) accessibility elements in
            device pixels, three times the screen on an iPhone, and iOS Safari let the page scroll
-           sideways over it. */
-        #app { position: fixed; top: 0; left: 0; width: 100%; height: 100%; height: 100dvh; overflow: hidden; contain: layout paint; touch-action: none; }
+           sideways over it.
+           Its own background colour matters too: iOS 27 blurs the top of a home-screen app
+           unless a fixed, coloured element sits at the top, and then gives the status bar that
+           colour instead. */
+        #app { background-color: var(--bg); position: fixed; top: 0; left: 0; width: 100%; height: 100%; height: 100dvh; overflow: hidden; contain: layout paint; touch-action: none; }
         html.unsupported #app { display: none; }
         /* Never shown: the App reads the safe area (notch, status bar, home indicator) from its padding. */
         #safe-area { position: fixed; visibility: hidden; pointer-events: none; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
