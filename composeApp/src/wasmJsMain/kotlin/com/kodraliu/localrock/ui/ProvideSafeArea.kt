@@ -69,29 +69,23 @@ private class SafeAreaWindowInsets(
     private val base: PlatformWindowInsets,
     private val safeArea: () -> SafeArea,
 ) : PlatformWindowInsets by base {
-    override val systemBars = base.systemBars.orAtLeast(
-        left = { safeArea().left }, top = { safeArea().top }, right = { safeArea().right }, bottom = { safeArea().bottom },
-    )
-    override val statusBars = base.statusBars.orAtLeast(top = { safeArea().top })
-    override val navigationBars = base.navigationBars.orAtLeast(bottom = { safeArea().bottom })
-    override val displayCutout = base.displayCutout.orAtLeast(left = { safeArea().left }, right = { safeArea().right })
+    override val systemBars = base.systemBars.orAtLeast { it }
+    override val statusBars = base.statusBars.orAtLeast { SafeArea(left = 0, top = it.top, right = 0, bottom = 0) }
+    override val navigationBars = base.navigationBars.orAtLeast { SafeArea(left = 0, top = 0, right = 0, bottom = it.bottom) }
+    override val displayCutout = base.displayCutout.orAtLeast { it.copy(top = 0, bottom = 0) }
 
     override fun excluding(safeInsets: Boolean, ime: Boolean): PlatformWindowInsets =
         if (safeInsets) base.excluding(safeInsets = true, ime = ime)
         else SafeAreaWindowInsets(base.excluding(safeInsets = false, ime = ime), safeArea)
-}
 
-private fun PlatformInsets.orAtLeast(
-    left: () -> Int = { 0 },
-    top: () -> Int = { 0 },
-    right: () -> Int = { 0 },
-    bottom: () -> Int = { 0 },
-) = PlatformInsets(
-    getLeft = { maxOf(this.left, left()) },
-    getTop = { maxOf(this.top, top()) },
-    getRight = { maxOf(this.right, right()) },
-    getBottom = { maxOf(this.bottom, bottom()) },
-)
+    /** These insets, each side at least as large as [edges] of the current safe area. */
+    private fun PlatformInsets.orAtLeast(edges: (SafeArea) -> SafeArea) = PlatformInsets(
+        getLeft = { maxOf(left, edges(safeArea()).left) },
+        getTop = { maxOf(top, edges(safeArea()).top) },
+        getRight = { maxOf(right, edges(safeArea()).right) },
+        getBottom = { maxOf(bottom, edges(safeArea()).bottom) },
+    )
+}
 
 private data class SafeAreaInsetsElement(val safeArea: () -> SafeArea) : ModifierNodeElement<SafeAreaInsetsNode>() {
     override fun create() = SafeAreaInsetsNode(safeArea)
