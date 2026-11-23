@@ -14,6 +14,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import com.kodraliu.localrock.getPlatform
 import com.kodraliu.localrock.shared.AppContainer
 import com.kodraliu.localrock.ui.LocalAppContainer
 import com.kodraliu.localrock.ui.devices.DeviceListScreen
@@ -61,13 +62,7 @@ fun AppNavHost() {
 
     LaunchedEffect(splashDone, introSeen, loggedIn, serverUrl, demoMode) {
         if (!splashDone) return@LaunchedEffect
-        val destination: Any = when {
-            !introSeen -> Welcome
-            demoMode -> DeviceList
-            serverUrl.isNullOrBlank() -> ServerSetup
-            !loggedIn -> Login
-            else -> DeviceList
-        }
+        val destination = firstScreen(getPlatform().isWebApp, introSeen, demoMode, serverUrl, loggedIn)
         navController.navigate(destination) {
             popUpTo(navController.graph.id) { inclusive = true }
         }
@@ -263,6 +258,24 @@ fun AppNavHost() {
  * The robot to open on launch, or null to stay on the device list: the only paired robot, or the
  * last one opened when there are several. Never guesses among several without a last-opened value.
  */
+/**
+ * Where the app goes once the splash is done. The Web App is served by the Server, so it has no
+ * intro about setting one up and no Server setup step.
+ */
+internal fun firstScreen(
+    isWebApp: Boolean,
+    introSeen: Boolean,
+    demoMode: Boolean,
+    serverUrl: String?,
+    loggedIn: Boolean,
+): Any = when {
+    !introSeen && !isWebApp -> Welcome
+    demoMode -> DeviceList
+    serverUrl.isNullOrBlank() && !isWebApp -> ServerSetup
+    !loggedIn -> Login
+    else -> DeviceList
+}
+
 internal fun launchRobotTarget(pairedDuids: List<String>, lastOpenedDuid: String?): String? = when {
     pairedDuids.size == 1 -> pairedDuids.first()
     lastOpenedDuid != null && lastOpenedDuid in pairedDuids -> lastOpenedDuid
