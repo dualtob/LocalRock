@@ -2313,8 +2313,9 @@ private fun PinGoScreen(
                     contentAlignment = Alignment.Center,
                 ) {
                     Canvas(
+                        // As wide as the screen where that fits, else as tall as it: a wide browser window
+                        // cut the bottom of the map off when the width alone decided.
                         modifier = Modifier
-                            .fillMaxWidth()
                             .aspectRatio(aspectRatio)
                             .onSizeChanged { imageSize = it }
                             .pointerInput(parsedMap) {
