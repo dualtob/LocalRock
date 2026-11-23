@@ -1,4 +1,6 @@
 import java.util.Base64
+import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
+import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -23,6 +25,33 @@ kotlin {
         iosTarget.binaries.framework {
             baseName = "ComposeApp"
             isStatic = true
+        }
+    }
+
+    // The Web App (see GLOSSARY.md). No `js` target: only browsers with WasmGC are supported.
+    @OptIn(ExperimentalWasmDsl::class)
+    wasmJs {
+        outputModuleName.set("localrock")
+        browser {
+            commonWebpackConfig {
+                outputFileName = "localrock.js"
+            }
+            testTask {
+                // Headless Firefox. Node can't run them: Compose's Skiko only loads in a browser.
+                useKarma { useFirefoxHeadless() }
+            }
+        }
+        binaries.executable()
+    }
+
+    // `appMain`/`appTest`: code and tests for the App only (Android and iOS), not the Web App.
+    @OptIn(ExperimentalKotlinGradlePluginApi::class)
+    applyDefaultHierarchyTemplate {
+        common {
+            group("app") {
+                withAndroidTarget()
+                group("ios")
+            }
         }
     }
 
@@ -67,11 +96,25 @@ kotlin {
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
         }
+        wasmJsMain { languageSettings.optIn("kotlin.js.ExperimentalWasmJsInterop") }
+        wasmJsMain.dependencies {
+            implementation(libs.ktor.client.jsEngine)
+        }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
             implementation(libs.ktor.client.mock)
             implementation(libs.kotlinx.coroutines.test)
             implementation(libs.multiplatformSettings.test)
+        }
+    }
+}
+
+// Compose's material3 pulls kotlinx-datetime 0.7 into the wasm build, which drops the
+// kotlinx.datetime.Instant that shared code uses; the compat build keeps both APIs.
+configurations.matching { it.name.startsWith("wasmJs") }.configureEach {
+    resolutionStrategy.eachDependency {
+        if (requested.group == "org.jetbrains.kotlinx" && requested.name.startsWith("kotlinx-datetime")) {
+            useVersion(libs.versions.kotlinxDatetimeWasm.get())
         }
     }
 }
