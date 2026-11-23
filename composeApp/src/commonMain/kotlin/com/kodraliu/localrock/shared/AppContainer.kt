@@ -62,6 +62,8 @@ class AppContainer(
 
     val appSettings: AppSettings = AppSettings(settings, pageOrigin)
 
+    private val isWebApp = pageOrigin != null
+
     val messages: MessageCenter = MessageCenter()
 
     val httpClient: HttpClient = buildVacLocalHttpClient(
@@ -297,7 +299,7 @@ class AppContainer(
                     if (!mqttStarted) return@collectLatest
                     messages.showBanner(
                         key = MessageCenter.BANNER_MQTT,
-                        text = "Offline — reconnecting…",
+                        text = mqttOfflineBannerText(isWebApp),
                         severity = MessageSeverity.WARNING,
                         dismissible = false,
                     )
@@ -463,3 +465,10 @@ class AppContainer(
         const val PROBE_LINK_RETRY_DELAY_MS = 500L
     }
 }
+
+/**
+ * The Web App reaches MQTT through the Server that served the page, so a link that stays down
+ * there means the Server can't be reached.
+ */
+internal fun mqttOfflineBannerText(isWebApp: Boolean): String =
+    if (isWebApp) "Can't reach the Server — reconnecting…" else "Offline — reconnecting…"

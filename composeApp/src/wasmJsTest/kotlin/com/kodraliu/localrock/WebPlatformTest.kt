@@ -6,10 +6,10 @@ import com.kodraliu.localrock.shared.onboarding.vacuumPairingSupported
 import com.kodraliu.localrock.shared.webrtc.liveViewSupported
 import kotlin.test.Test
 import kotlin.test.assertFalse
-import kotlin.test.assertNull
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
-/** What the Web App reports about the platform-specific features it does not have. */
+/** What the Web App reports about its platform-specific features. */
 class WebPlatformTest {
 
     @Test
@@ -33,7 +33,7 @@ class WebPlatformTest {
     }
 
     @Test
-    fun there_is_no_mqtt_transport_yet() {
-        assertNull(defaultMqttTransport())
+    fun there_is_an_mqtt_transport() {
+        assertNotNull(defaultMqttTransport())
     }
 }
