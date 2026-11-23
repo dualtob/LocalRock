@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.WindowInsets
+import com.kodraliu.localrock.getPlatform
 import com.kodraliu.localrock.shared.vacuum.RoomType
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.heightIn
@@ -101,6 +102,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.input.pointer.isPrimaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.TextStyle
@@ -772,6 +774,13 @@ private fun EditorCanvas(
                         currentOnSelect(if (hit == currentSelection) null else hit)
                     }
                 }
+                // The mouse wheel zooms about the pointer in the Web App, as a pinch does about the fingers.
+                .wheelZoom(getPlatform().isWebApp, map, viewport) { pointer, zoom ->
+                    val view = size.toSize()
+                    val (newScale, newOffset) = zoomMap(scale, offset, pointer, Offset.Zero, zoom, map.fittedSize(view), view)
+                    scale = newScale
+                    offset = newOffset
+                }
                 .pointerInput(map, mode, drawEnabled, viewSize) {
                     val view = size.toSize()
                     val fitted = map.fittedSize(view)
@@ -795,6 +804,8 @@ private fun EditorCanvas(
                                 )
                             } else null
                         var gesture = when {
+                            // The right or middle mouse button always moves the map, even while drawing.
+                            dragMovesMap(down.type, currentEvent.buttons.isPrimaryPressed) -> Gesture.PAN
                             target != null -> Gesture.EDIT
                             currentDrawEnabled -> Gesture.DRAW
                             else -> Gesture.PAN
