@@ -10,8 +10,8 @@ class WebAppServerTest {
     @Test
     fun a_valid_file_names_the_server() {
         assertEquals(
-            "https://api-roborock.dinglreiter.eu:555",
-            webAppServer("""{"serverUrl": "https://api-roborock.dinglreiter.eu:555"}"""),
+            "https://api-roborock.example.com:555",
+            webAppServer("""{"serverUrl": "https://api-roborock.example.com:555"}"""),
         )
     }
 
