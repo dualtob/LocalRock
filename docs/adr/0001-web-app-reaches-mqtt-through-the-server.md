@@ -1,3 +1,7 @@
+---
+status: superseded by ADR-0002
+---
+
 # The Server serves the Web App and its MQTT over WebSockets
 
 Browsers can't open raw TCP sockets, and the Server only offers MQTT over TCP+TLS (its Mosquitto listens on `127.0.0.1` behind a TLS proxy). We'll add two things to the Server: an MQTT-over-WebSocket listener at `/mqtt` on its existing HTTPS port, relayed internally to Mosquitto, and a config option to serve a folder of static files from the Server's own origin. For now these live only on our fork, `dualtob/local_roborock_server`, not upstream `Python-roborock/local_roborock_server`, so running the Web App means running that fork. The fork's Docker image downloads a Web App release from `dualtob/LocalRock` when it's built and serves it, so deploying the Server deploys the Web App. Page, REST API and MQTT share one origin, so the Server needs no CORS and the browser trusts one certificate.
