@@ -21,13 +21,11 @@ import kotlinx.coroutines.launch
 import com.kodraliu.localrock.shared.settings.ThemeMode
 import com.kodraliu.localrock.ui.LocalAppContainer
 import com.kodraliu.localrock.ui.SystemBarsAppearance
-import com.kodraliu.localrock.ui.VacDarkColorScheme
-import com.kodraliu.localrock.ui.VacLightColorScheme
 import com.kodraliu.localrock.ui.adaptive.ProvideWindowLayout
+import com.kodraliu.localrock.ui.appColorScheme
 import com.kodraliu.localrock.ui.messages.MessageBannerArea
 import com.kodraliu.localrock.ui.messages.TransientMessageHost
 import com.kodraliu.localrock.ui.navigation.AppNavHost
-import com.kodraliu.localrock.ui.platformDynamicColorScheme
 
 @Composable
 fun App(container: AppContainer) {
@@ -38,8 +36,7 @@ fun App(container: AppContainer) {
         ThemeMode.LIGHT -> false
         ThemeMode.SYSTEM -> systemDark
     }
-    val colorScheme = platformDynamicColorScheme(useDark)
-        ?: if (useDark) VacDarkColorScheme else VacLightColorScheme
+    val colorScheme = appColorScheme(useDark)
     SystemBarsAppearance(useDark)
 
     val lifecycleOwner = LocalLifecycleOwner.current

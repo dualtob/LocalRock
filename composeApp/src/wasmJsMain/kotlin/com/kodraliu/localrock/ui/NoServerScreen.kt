@@ -25,7 +25,7 @@ import org.jetbrains.compose.resources.stringResource
  */
 @Composable
 fun NoServerScreen() {
-    MaterialTheme(colorScheme = if (isSystemInDarkTheme()) VacDarkColorScheme else VacLightColorScheme) {
+    MaterialTheme(colorScheme = appColorScheme(isSystemInDarkTheme())) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             CenteredContent {
                 Column(
