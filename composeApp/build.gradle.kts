@@ -99,6 +99,7 @@ kotlin {
         wasmJsMain { languageSettings.optIn("kotlin.js.ExperimentalWasmJsInterop") }
         wasmJsMain.dependencies {
             implementation(libs.ktor.client.jsEngine)
+            implementation(libs.androidx.navigationevent)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
