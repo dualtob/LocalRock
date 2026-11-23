@@ -9,7 +9,7 @@ import kotlin.test.assertEquals
  * The Web App's Server comes from its deployment (`config.json`, see ADR 0002), so there is
  * nothing to set up before login. The App keeps its own stored Server.
  */
-class WebAppServerTest {
+class FixedServerLaunchTest {
 
     private val server = "https://robots.lan:555"
 
