@@ -4,6 +4,7 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.window.ComposeViewport
 import com.kodraliu.localrock.shared.AppContainer
 import com.kodraliu.localrock.shared.mqtt.defaultMqttTransport
+import com.kodraliu.localrock.ui.navigation.BrowserBackButton
 import com.russhwolf.settings.StorageSettings
 import kotlinx.browser.document
 import kotlinx.browser.window
@@ -20,6 +21,7 @@ fun main() {
         pageOrigin = window.location.origin,
     )
     ComposeViewport(document.body!!) {
+        BrowserBackButton()
         App(container)
     }
 }

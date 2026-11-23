@@ -99,6 +99,7 @@ kotlin {
         wasmJsMain { languageSettings.optIn("kotlin.js.ExperimentalWasmJsInterop") }
         wasmJsMain.dependencies {
             implementation(libs.ktor.client.jsEngine)
+            implementation(libs.androidx.navigationevent)
             // MQTT over WebSockets, bundled into the Web App (no CDN).
             implementation(npm("mqtt", "5.16.1"))
         }
