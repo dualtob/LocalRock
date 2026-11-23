@@ -21,5 +21,5 @@ The LocalRock mobile client for Android and iOS.
 _Avoid_: Mobile app, client
 
 **Web App**:
-The LocalRock client that runs in a desktop browser on the same home network as the Server, and looks nearly the same as the App.
+The LocalRock client that runs in a browser on a computer or a phone, on the same home network as the Server, and looks nearly the same as the App. It can also be added to a phone's home screen and opened from there.
 _Avoid_: Webapp, web client, localrobot

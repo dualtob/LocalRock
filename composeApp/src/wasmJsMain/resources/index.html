@@ -2,9 +2,26 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Phones: exactly as wide as the screen, drawn behind the notch and home indicator
+         (viewport-fit=cover; the App keeps clear of them through the safe area, see #safe-area),
+         and no page zoom. The map has its own pinch zoom. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
     <title>LocalRock</title>
+    <!-- "Add to Home Screen": a full-screen LocalRock app with the App's icon. The status bar keeps
+         its own background in the theme colour: since iOS 26.1 a home-screen app no longer draws
+         behind a see-through one, but still reports its height as a safe-area inset, which left a
+         blurred, empty strip under it. -->
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="LocalRock">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="theme-color" content="#fef7ff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#141218" media="(prefers-color-scheme: dark)">
     <style>
         /* The LocalRock colours (Theme.kt) on Material's neutral background, light or dark like the system. */
         :root { --bg: #fef7ff; --fg: #1d1b20; --muted: #49454f; --accent: #006a6a; }
@@ -12,6 +29,17 @@
             :root { --bg: #141218; --fg: #e6e0e9; --muted: #cac4d0; --accent: #4cdada; }
         }
         html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: var(--bg); color: var(--fg); }
+        /* The App fills the visible part of the page: the whole window on a computer; on a phone the
+           screen above Safari's toolbar (dvh), behind the notch and home indicator. Touches go to
+           the App alone, so the page never pans or zooms and Safari's toolbar stays put.
+           contain: paint makes #app the box that Compose's fixed-position elements are placed in
+           and clipped to. Compose 1.12 sizes one of its (invisible) accessibility elements in
+           device pixels, three times the screen on an iPhone, and iOS Safari let the page scroll
+           sideways over it. */
+        #app { position: fixed; top: 0; left: 0; width: 100%; height: 100%; height: 100dvh; overflow: hidden; contain: layout paint; touch-action: none; }
+        html.unsupported #app { display: none; }
+        /* Never shown: the App reads the safe area (notch, status bar, home indicator) from its padding. */
+        #safe-area { position: fixed; visibility: hidden; pointer-events: none; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
         #unsupported { display: none; box-sizing: border-box; height: 100%; padding: 24px; align-items: center; justify-content: center; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
         #unsupported div { max-width: 32em; }
         #unsupported h1 { margin: 0 0 8px; font-size: 22px; font-weight: 600; color: var(--accent); }
@@ -37,6 +65,8 @@
     </script>
 </head>
 <body>
+<div id="app"></div>
+<div id="safe-area"></div>
 <div id="unsupported" role="alert">
     <div>
         <h1>This browser can't run LocalRock</h1>
