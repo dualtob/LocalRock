@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Phones: exactly as wide as the screen, drawn behind the notch and home indicator
+         (viewport-fit=cover; the App keeps clear of them through the safe area, see #safe-area),
+         and no page zoom. The map has its own pinch zoom. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
     <title>LocalRock</title>
     <!-- "Add to Home Screen": a full-screen LocalRock app with the App's icon. The status bar is
@@ -22,6 +25,17 @@
             :root { --bg: #141218; --fg: #e6e0e9; --muted: #cac4d0; --accent: #4cdada; }
         }
         html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: var(--bg); color: var(--fg); }
+        /* The App fills the visible part of the page: the whole window on a computer; on a phone the
+           screen above Safari's toolbar (dvh), behind the notch and home indicator. Touches go to
+           the App alone, so the page never pans or zooms and Safari's toolbar stays put.
+           contain: paint makes #app the box that Compose's fixed-position elements are placed in
+           and clipped to. Compose 1.12 sizes one of its (invisible) accessibility elements in
+           device pixels, three times the screen on an iPhone, and iOS Safari let the page scroll
+           sideways over it. */
+        #app { position: fixed; top: 0; left: 0; width: 100%; height: 100%; height: 100dvh; overflow: hidden; contain: layout paint; touch-action: none; }
+        html.unsupported #app { display: none; }
+        /* Never shown: the App reads the safe area (notch, status bar, home indicator) from its padding. */
+        #safe-area { position: fixed; visibility: hidden; pointer-events: none; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
         #unsupported { display: none; box-sizing: border-box; height: 100%; padding: 24px; align-items: center; justify-content: center; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
         #unsupported div { max-width: 32em; }
         #unsupported h1 { margin: 0 0 8px; font-size: 22px; font-weight: 600; color: var(--accent); }
@@ -47,6 +61,8 @@
     </script>
 </head>
 <body>
+<div id="app"></div>
+<div id="safe-area"></div>
 <div id="unsupported" role="alert">
     <div>
         <h1>This browser can't run LocalRock</h1>
