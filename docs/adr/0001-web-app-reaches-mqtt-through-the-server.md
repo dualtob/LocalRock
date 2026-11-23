@@ -1,5 +1,5 @@
 ---
-status: superseded by ADR-0002
+status: superseded by ADR 0002
 ---
 
 # The Server serves the Web App and its MQTT over WebSockets

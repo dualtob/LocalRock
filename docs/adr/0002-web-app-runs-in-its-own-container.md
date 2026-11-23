@@ -1,5 +1,5 @@
 ---
-status: accepted, supersedes ADR-0001
+status: accepted, supersedes ADR 0001
 ---
 
 # The Web App runs in its own container and calls the Server cross-origin
