@@ -4,7 +4,6 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.window.ComposeViewport
 import com.kodraliu.localrock.shared.AppContainer
 import com.kodraliu.localrock.shared.mqtt.webAppMqttTransport
-import com.kodraliu.localrock.shared.settings.WebAppServer
 import com.kodraliu.localrock.shared.settings.webAppServer
 import com.kodraliu.localrock.ui.NoServerScreen
 import com.kodraliu.localrock.ui.ProvideSafeArea
@@ -29,9 +28,8 @@ import org.w3c.fetch.Response
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
     MainScope().launch {
-        val server = webAppServer(fetchConfigJson())
-        val container = (server as? WebAppServer.Set)?.let {
-            AppContainer(StorageSettings(), webAppMqttTransport(it.url), fixedServer = it.url)
+        val container = webAppServer(fetchConfigJson())?.let { server ->
+            AppContainer(StorageSettings(), webAppMqttTransport(server), fixedServer = server)
         }
         ComposeViewport(document.getElementById("app")!!) {
             BrowserBackButton()
