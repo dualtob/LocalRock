@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.input.pointer.isPrimaryPressed
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
@@ -54,6 +55,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
+import com.kodraliu.localrock.ui.LocalAppContainer
 import com.kodraliu.localrock.shared.vacuum.ZoneRect
 import com.kodraliu.localrock.shared.vacuum.map.ParsedMap
 import androidx.compose.ui.geometry.Rect
@@ -170,6 +172,15 @@ fun ZoneCleanScreen(
                                     mapScale = scale
                                     mapOffset = offset
                                 })
+                            }
+                            // The mouse wheel zooms about the pointer in the Web App.
+                            .wheelZoomFlatMap(
+                                LocalAppContainer.current.isWebApp,
+                                fittedSize = { view -> currentMap.fittedSize(view) },
+                                view = { mapScale to mapOffset },
+                            ) { newScale, newOffset ->
+                                mapScale = newScale
+                                mapOffset = newOffset
                             }
                             .pointerInput(Unit) {
                                 // Screen position -> map canvas position, kept on the map.
@@ -327,7 +338,7 @@ fun ZoneCleanScreen(
                         sent -> "Zone cleaning started!"
                         selected != null -> "Drag the zone to move it · Drag a corner to resize · Tap elsewhere when done"
                         zones.isNotEmpty() -> "${zones.size} zone(s) — tap a zone to change it, or Start to begin"
-                        else -> "Drag to draw a zone · Two fingers to zoom and move · Double-tap to reset the view"
+                        else -> zoneDrawHint(LocalAppContainer.current.isWebApp)
                     },
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     style = MaterialTheme.typography.bodySmall,
@@ -355,10 +366,18 @@ private suspend fun PointerInputScope.detectZoneGestures(
         val down = awaitFirstDown(requireUnconsumed = false)
         var drawing = false
         var transforming = false
+        // The right or middle mouse button moves the map, as a second finger does.
+        val mousePan = dragMovesMap(down.type, currentEvent.buttons.isPrimaryPressed)
         do {
             val event = awaitPointerEvent()
             val pressed = event.changes.count { it.pressed }
-            if (pressed >= 2 || transforming) {
+            if (mousePan) {
+                val change = event.changes.firstOrNull { it.id == down.id }
+                if (change != null && change.pressed && change.positionChanged()) {
+                    onTransform(change.position, change.position - change.previousPosition, 1f)
+                    change.consume()
+                }
+            } else if (pressed >= 2 || transforming) {
                 if (!transforming) {
                     transforming = true
                     if (drawing) {
@@ -413,3 +432,8 @@ private fun zoneScreenRect(map: ParsedMap, zone: ZoneRect, content: Size, scale:
     val b = zoneScreenPoint(map, zone.x2, zone.y2, content, scale, offset)
     return Rect(minOf(a.x, b.x), minOf(a.y, b.y), maxOf(a.x, b.x), maxOf(a.y, b.y))
 }
+
+/** How to draw a zone and move the map, with the mouse in the Web App and with fingers in the App. */
+internal fun zoneDrawHint(isWebApp: Boolean): String =
+    if (isWebApp) "Drag to draw a zone · Scroll to zoom · Right-drag to move · Double-click to reset the view"
+    else "Drag to draw a zone · Two fingers to zoom and move · Double-tap to reset the view"

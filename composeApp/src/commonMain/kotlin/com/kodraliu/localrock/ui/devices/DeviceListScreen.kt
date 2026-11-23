@@ -59,8 +59,31 @@ import com.kodraliu.localrock.shared.device.Reachability
 import com.kodraliu.localrock.shared.model.Device
 import com.kodraliu.localrock.shared.vacuum.productDisplayName
 import com.kodraliu.localrock.shared.onboarding.vacuumPairingSupported
+import com.kodraliu.localrock.ui.LocalAppContainer
 import com.kodraliu.localrock.ui.AppColors
 import com.kodraliu.localrock.ui.icons.RobotVacuum
+
+/** What the robot list offers for adding a robot. */
+internal sealed interface AddRobotOffer {
+    /** Onboarding is available here. */
+    data object Onboard : AddRobotOffer
+
+    /** No onboarding, and nothing to say about it. */
+    data object None : AddRobotOffer
+
+    /** No onboarding here; [message] points to the App. */
+    data class NeedsApp(val message: String) : AddRobotOffer
+}
+
+/** Onboarding joins the robot's own Wi-Fi, which a browser can't, so the Web App points to the App. */
+internal fun addRobotOffer(isWebApp: Boolean, onboardingSupported: Boolean): AddRobotOffer = when {
+    isWebApp -> AddRobotOffer.NeedsApp(
+        "To add a robot, use the LocalRock App on your phone: setting one up joins the robot's " +
+            "own Wi-Fi, which a browser can't do. Robots you add there show up here.",
+    )
+    onboardingSupported -> AddRobotOffer.Onboard
+    else -> AddRobotOffer.None
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,6 +102,7 @@ fun DeviceListScreen(
     val error by viewModel.error.collectAsState()
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showOverflow by remember { mutableStateOf(false) }
+    val needsApp = (addRobotOffer(LocalAppContainer.current.isWebApp, vacuumPairingSupported) as? AddRobotOffer.NeedsApp)?.message
 
     Scaffold(
         topBar = {
@@ -133,6 +157,7 @@ fun DeviceListScreen(
                     EmptyState(
                         error = error,
                         canPair = vacuumPairingSupported,
+                        needsApp = needsApp,
                         onAddVacuum = onAddVacuum,
                         onRetry = viewModel::refresh,
                     )
@@ -166,6 +191,17 @@ fun DeviceListScreen(
                                 onClick = { if (device.duid in unpaired && vacuumPairingSupported) onPairDevice(device.duid) else onDeviceClick(device) },
                             )
                         }
+                        if (needsApp != null) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                Text(
+                                    needsApp,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                                )
+                            }
+                        }
                         item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(80.dp)) }
                     }
                 }
@@ -197,6 +233,7 @@ private fun EmptyState(
     canPair: Boolean,
     onAddVacuum: () -> Unit,
     onRetry: () -> Unit,
+    needsApp: String? = null,
 ) {
     Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
         Column(
@@ -215,7 +252,7 @@ private fun EmptyState(
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                error ?: "Add your first vacuum, or pull down to check the server again.",
+                error ?: needsApp ?: "Add your first vacuum, or pull down to check the server again.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,

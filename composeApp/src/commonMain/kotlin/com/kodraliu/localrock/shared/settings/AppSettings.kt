@@ -31,7 +31,11 @@ private const val KEY_LAST_OPENED_DUID = "last_opened_duid"
 private const val DEFAULT_MAP_3D_YAW = 35f
 private const val DEFAULT_MAP_3D_TILT = 53f
 
-class AppSettings(private val settings: Settings) {
+/**
+ * [pageOrigin] is the Web App's page origin, which is the Server: it replaces the stored Server
+ * address and can't be changed. Null in the App.
+ */
+class AppSettings(private val settings: Settings, private val pageOrigin: String? = null) {
 
 
     val installId: String = settings.getStringOrNull(KEY_INSTALL_ID) ?: run {
@@ -41,7 +45,7 @@ class AppSettings(private val settings: Settings) {
     }
 
     private val _serverBaseUrl =
-        MutableStateFlow(settings.getStringOrNull(KEY_SERVER_BASE_URL))
+        MutableStateFlow(pageOrigin ?: settings.getStringOrNull(KEY_SERVER_BASE_URL))
     val serverBaseUrl: StateFlow<String?> = _serverBaseUrl.asStateFlow()
 
     private val _introSeen = MutableStateFlow(settings.getBoolean(KEY_INTRO_SEEN, false))
@@ -83,6 +87,7 @@ class AppSettings(private val settings: Settings) {
     }
 
     fun setServerBaseUrl(url: String?) {
+        if (pageOrigin != null) return
         if (url.isNullOrBlank()) {
             settings.remove(KEY_SERVER_BASE_URL)
             _serverBaseUrl.value = null

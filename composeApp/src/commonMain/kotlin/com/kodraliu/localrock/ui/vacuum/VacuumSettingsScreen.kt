@@ -107,6 +107,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.kodraliu.localrock.ui.LocalAppContainer
 import com.kodraliu.localrock.shared.vacuum.AdvertisedFeature
 import com.kodraliu.localrock.shared.vacuum.BetaFeatureState
 import com.kodraliu.localrock.shared.vacuum.FeatureChoice
@@ -981,7 +982,7 @@ private fun ConsumableItem(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
 private fun HistoryScreen(
     records: List<CleanRecord>,
@@ -997,6 +998,9 @@ private fun HistoryScreen(
     var selected by remember { mutableStateOf<CleanRecord?>(null) }
     var cruiseTab by remember { mutableStateOf(false) }
     val open = selected
+    // In the Web App, Escape and the browser's back button close an open run first, like the arrow does,
+    // instead of leaving History. The App keeps its system back as it was.
+    BackHandler(enabled = open != null && LocalAppContainer.current.isWebApp) { selected = null }
     val hasCruise = (summary?.patrolCount ?: 0) > 0 || records.any { it.isCruise }
     val showCruise = hasCruise && cruiseTab
     val shown = when {
@@ -2309,8 +2313,9 @@ private fun PinGoScreen(
                     contentAlignment = Alignment.Center,
                 ) {
                     Canvas(
+                        // As wide as the screen where that fits, else as tall as it: a wide browser window
+                        // cut the bottom of the map off when the width alone decided.
                         modifier = Modifier
-                            .fillMaxWidth()
                             .aspectRatio(aspectRatio)
                             .onSizeChanged { imageSize = it }
                             .pointerInput(parsedMap) {

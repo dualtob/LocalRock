@@ -128,7 +128,8 @@ fun LoginScreen(onServerSetup: () -> Unit) {
 
             // Which server you are about to sign in to is the thing people get wrong, so show it
             // and make it changeable from here instead of hiding it behind a generic settings link.
-            serverUrl?.takeIf { it.isNotBlank() }?.let { url ->
+            // The Web App's Server is the page it was loaded from, so there is nothing to choose.
+            serverUrl?.takeIf { it.isNotBlank() && !container.isWebApp }?.let { url ->
                 Surface(
                     onClick = onServerSetup,
                     shape = MaterialTheme.shapes.large,

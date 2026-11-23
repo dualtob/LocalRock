@@ -61,13 +61,7 @@ fun AppNavHost() {
 
     LaunchedEffect(splashDone, introSeen, loggedIn, serverUrl, demoMode) {
         if (!splashDone) return@LaunchedEffect
-        val destination: Any = when {
-            !introSeen -> Welcome
-            demoMode -> DeviceList
-            serverUrl.isNullOrBlank() -> ServerSetup
-            !loggedIn -> Login
-            else -> DeviceList
-        }
+        val destination = firstScreen(LaunchState(container.isWebApp, introSeen, demoMode, serverUrl, loggedIn))
         navController.navigate(destination) {
             popUpTo(navController.graph.id) { inclusive = true }
         }
@@ -256,6 +250,29 @@ fun AppNavHost() {
                 )
             }
         }
+    }
+}
+
+/** What [firstScreen] decides on. */
+internal data class LaunchState(
+    val isWebApp: Boolean,
+    val introSeen: Boolean,
+    val demoMode: Boolean,
+    val serverUrl: String?,
+    val loggedIn: Boolean,
+)
+
+/**
+ * Where the app goes once the splash is done. The Web App is served by the Server, so it has no
+ * intro about setting one up and no Server setup step.
+ */
+internal fun firstScreen(state: LaunchState): FirstScreen = with(state) {
+    when {
+        !introSeen && !isWebApp -> Welcome
+        demoMode -> DeviceList
+        serverUrl.isNullOrBlank() && !isWebApp -> ServerSetup
+        !loggedIn -> Login
+        else -> DeviceList
     }
 }
 

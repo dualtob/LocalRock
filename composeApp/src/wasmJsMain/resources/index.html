@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
+    <title>LocalRock</title>
+    <style>
+        /* The LocalRock colours (Theme.kt) on Material's neutral background, light or dark like the system. */
+        :root { --bg: #fef7ff; --fg: #1d1b20; --muted: #49454f; --accent: #006a6a; }
+        @media (prefers-color-scheme: dark) {
+            :root { --bg: #141218; --fg: #e6e0e9; --muted: #cac4d0; --accent: #4cdada; }
+        }
+        html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: var(--bg); color: var(--fg); }
+        #unsupported { display: none; box-sizing: border-box; height: 100%; padding: 24px; align-items: center; justify-content: center; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+        #unsupported div { max-width: 32em; }
+        #unsupported h1 { margin: 0 0 8px; font-size: 22px; font-weight: 600; color: var(--accent); }
+        #unsupported p { margin: 0 0 8px; color: var(--muted); }
+        html.unsupported #unsupported { display: flex; }
+    </style>
+    <script>
+        // LocalRock is Kotlin compiled to WebAssembly with garbage collection (wasm GC). A browser
+        // without it would show a blank page, so check first and only then load the app. The
+        // bytes are a module that declares one struct type, which only wasm GC accepts.
+        (function () {
+            var gc = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 95, 1, 120, 0]);
+            var supported = false;
+            try { supported = typeof WebAssembly === "object" && WebAssembly.validate(gc); } catch (e) {}
+            if (supported) {
+                var script = document.createElement("script");
+                script.src = "localrock.js";
+                document.head.appendChild(script);
+            } else {
+                document.documentElement.className = "unsupported";
+            }
+        })();
+    </script>
+</head>
+<body>
+<div id="unsupported" role="alert">
+    <div>
+        <h1>This browser can't run LocalRock</h1>
+        <p>LocalRock needs a browser with WebAssembly garbage collection:
+            Chrome or Edge 119+, Firefox 120+, or Safari 18.2+.</p>
+        <p>Update your browser or open this page in one of those.</p>
+    </div>
+</div>
+</body>
+</html>

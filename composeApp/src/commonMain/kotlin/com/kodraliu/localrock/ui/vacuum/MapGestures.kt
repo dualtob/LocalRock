@@ -7,11 +7,18 @@ import androidx.compose.foundation.gestures.calculateCentroidSize
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateRotation
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.unit.toSize
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.pow
 
 /**
  * Pan, pinch-zoom and twist, like `detectTransformGestures`, but also telling the caller how many
@@ -83,3 +90,64 @@ internal fun isTiltDrag(fingers: Int, pan: Offset, zoom: Float, rotation: Float)
 
 private const val TILT_MAX_ZOOM_CHANGE = 0.015f
 private const val TILT_MAX_ROTATION_DEGREES = 1.5f
+
+/**
+ * Mouse-wheel zoom for the Web App's maps, about the pointer like a pinch is about the fingers. The
+ * App leaves the wheel alone ([enabled] false), so its maps behave as before. Like `pointerInput`, the
+ * handler restarts when one of [keys] changes, so [onZoom] must not read anything else that changes.
+ */
+internal fun Modifier.wheelZoom(
+    enabled: Boolean,
+    vararg keys: Any?,
+    onZoom: PointerInputScope.(pointer: Offset, zoom: Float) -> Unit,
+): Modifier =
+    if (!enabled) this else pointerInput(*keys) {
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent()
+                if (event.type != PointerEventType.Scroll) continue
+                val change = event.changes.firstOrNull() ?: continue
+                val zoom = wheelZoomFactor(change.scrollDelta.y)
+                if (zoom != 1f) onZoom(change.position, zoom)
+                change.consume()
+            }
+        }
+    }
+
+/**
+ * [wheelZoom] for a flat map drawn at a scale and offset (the zone and editor maps): [view] reads the
+ * current scale and offset, [fittedSize] sizes the map in the view, and [onView] gets the zoomed ones.
+ */
+internal fun Modifier.wheelZoomFlatMap(
+    enabled: Boolean,
+    vararg keys: Any?,
+    fittedSize: (view: Size) -> Size,
+    view: () -> Pair<Float, Offset>,
+    onView: (scale: Float, offset: Offset) -> Unit,
+): Modifier = wheelZoom(enabled, *keys) { pointer, zoom ->
+    val viewSize = size.toSize()
+    val (scale, offset) = view()
+    val (newScale, newOffset) = zoomMap(scale, offset, pointer, Offset.Zero, zoom, fittedSize(viewSize), viewSize)
+    onView(newScale, newOffset)
+}
+
+/**
+ * The zoom change for one wheel event of [scrollDeltaPx] pixels, as Compose passes a browser's wheel
+ * event on: rolled away (negative) zooms in by [WHEEL_ZOOM_STEP] per notch of [WHEEL_NOTCH_PX], towards
+ * the user zooms out by the same step. A fast flick counts as at most two notches, and a trackpad's few
+ * pixels zoom a little.
+ */
+internal fun wheelZoomFactor(scrollDeltaPx: Float): Float =
+    WHEEL_ZOOM_STEP.pow(-(scrollDeltaPx / WHEEL_NOTCH_PX).coerceIn(-MAX_WHEEL_NOTCHES, MAX_WHEEL_NOTCHES))
+
+private const val WHEEL_ZOOM_STEP = 1.2f
+private const val WHEEL_NOTCH_PX = 100f
+private const val MAX_WHEEL_NOTCHES = 2f
+
+/**
+ * Whether a drag on a map where the left button draws (zones, walls, split lines) moves the map
+ * instead: one made with the right or middle mouse button. A finger or pen never does, as Android
+ * reports no buttons for them.
+ */
+internal fun dragMovesMap(type: PointerType, primaryPressed: Boolean): Boolean =
+    type == PointerType.Mouse && !primaryPressed

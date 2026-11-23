@@ -58,6 +58,20 @@ private const val PROJECT_URL = "https://github.com/DonSidro/LocalRock/"
 
 private const val PRIVACY_URL = "https://donsidro.github.io/LocalRock/"
 
+internal enum class SettingsSection { Appearance, Connection, Alerts, Contribute, About }
+
+/**
+ * The sections Settings shows. The Web App's Server is the page's own origin, so it has no Server
+ * field, and a browser tab posts no alerts. Alerts are about robots, so they wait for sign-in.
+ */
+internal fun settingsSections(isWebApp: Boolean, signedIn: Boolean): List<SettingsSection> = buildList {
+    add(SettingsSection.Appearance)
+    if (!isWebApp) add(SettingsSection.Connection)
+    if (!isWebApp && signedIn) add(SettingsSection.Alerts)
+    add(SettingsSection.Contribute)
+    add(SettingsSection.About)
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(onDone: () -> Unit, allowCancel: Boolean) {
@@ -70,6 +84,7 @@ fun SettingsScreen(onDone: () -> Unit, allowCancel: Boolean) {
     var url by remember { mutableStateOf(savedUrl ?: "") }
     var showWhatsNew by remember { mutableStateOf(false) }
     val whatsNew = whatsNewFor(APP_VERSION)
+    val sections = settingsSections(container.isWebApp, signedIn = userData != null)
 
     Scaffold(
         topBar = {
@@ -114,6 +129,8 @@ fun SettingsScreen(onDone: () -> Unit, allowCancel: Boolean) {
                     }
                 }
 
+                // Not indented, to keep merges from upstream small.
+                if (SettingsSection.Connection in sections) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
                 SectionLabel("Connection")
@@ -149,9 +166,9 @@ fun SettingsScreen(onDone: () -> Unit, allowCancel: Boolean) {
                         modifier = Modifier.fillMaxWidth(),
                     ) { Text("Explore the demo (no server needed)") }
                 }
+                }
 
-                // Alerts are about robots, and there are none to watch before signing in.
-                if (userData != null) {
+                if (SettingsSection.Alerts in sections) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                     NotificationSettings()
                 }

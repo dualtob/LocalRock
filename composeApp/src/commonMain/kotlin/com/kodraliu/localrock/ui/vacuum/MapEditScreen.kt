@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.WindowInsets
+import com.kodraliu.localrock.ui.LocalAppContainer
 import com.kodraliu.localrock.shared.vacuum.RoomType
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.heightIn
@@ -66,6 +67,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -101,6 +103,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.input.pointer.isPrimaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.TextStyle
@@ -571,7 +574,10 @@ fun MapEditScreen(
 
     val room = selectedRoom
     if (showRoomSheet && room != null && pm != null) {
-        ModalBottomSheet(onDismissRequest = { showRoomSheet = false }) {
+        // Opened at full height in the Web App: a mouse wheel scrolls the sheet's content but can't pull a
+        // half-open sheet up, so the lower actions would be out of reach without dragging the handle.
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = LocalAppContainer.current.isWebApp)
+        ModalBottomSheet(onDismissRequest = { showRoomSheet = false }, sheetState = sheetState) {
             RoomSheet(
                 map = pm,
                 segment = room,
@@ -772,6 +778,17 @@ private fun EditorCanvas(
                         currentOnSelect(if (hit == currentSelection) null else hit)
                     }
                 }
+                // The mouse wheel zooms about the pointer in the Web App, as a pinch does about the fingers.
+                .wheelZoomFlatMap(
+                    LocalAppContainer.current.isWebApp,
+                    map,
+                    viewport,
+                    fittedSize = { view -> map.fittedSize(view) },
+                    view = { scale to offset },
+                ) { newScale, newOffset ->
+                    scale = newScale
+                    offset = newOffset
+                }
                 .pointerInput(map, mode, drawEnabled, viewSize) {
                     val view = size.toSize()
                     val fitted = map.fittedSize(view)
@@ -795,6 +812,8 @@ private fun EditorCanvas(
                                 )
                             } else null
                         var gesture = when {
+                            // The right or middle mouse button always moves the map, even while drawing.
+                            dragMovesMap(down.type, currentEvent.buttons.isPrimaryPressed) -> Gesture.PAN
                             target != null -> Gesture.EDIT
                             currentDrawEnabled -> Gesture.DRAW
                             else -> Gesture.PAN

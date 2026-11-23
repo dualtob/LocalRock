@@ -2,12 +2,15 @@ package com.kodraliu.localrock.ui.navigation
 
 import kotlinx.serialization.Serializable
 
+/** A screen the app can open on once the splash is done, see [firstScreen]. */
+sealed interface FirstScreen
+
 // Top-level destinations
 @Serializable data object Splash
-@Serializable data object Welcome
-@Serializable data object ServerSetup
-@Serializable data object Login
-@Serializable data object DeviceList
+@Serializable data object Welcome : FirstScreen
+@Serializable data object ServerSetup : FirstScreen
+@Serializable data object Login : FirstScreen
+@Serializable data object DeviceList : FirstScreen
 @Serializable data object AppSettings
 @Serializable data class AddVacuum(val duid: String? = null)
 

@@ -1,0 +1,70 @@
+name: Web App Release
+
+# Builds the production Web App bundle and publishes it as a GitHub Release.
+# Triggered by pushing a Web App tag, e.g. `git tag web-v1.0.0 && git push origin web-v1.0.0`.
+# Web App tags (`web-v*`) are separate from App releases, which this workflow ignores.
+#
+# The release asset is always named `localrock-web.zip`, so the Server image can fetch
+#   https://github.com/dualtob/LocalRock/releases/download/<tag>/localrock-web.zip
+# Web App releases are never marked "Latest" (that stays with App releases), so
+# `.../releases/latest/download/...` must not be used to find them.
+# The zip holds the static files with `index.html` at its root, ready for the Server's
+# `[web_app] folder` option.
+
+on:
+  push:
+    tags:
+      - 'web-v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: web-app-release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  ASSET: localrock-web.zip
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # The Android Gradle plugin needs an SDK to configure the project, even for wasm tasks.
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+
+      - name: Build production wasm bundle
+        run: ./gradlew --no-daemon :composeApp:wasmJsBrowserDistribution
+
+      - name: Zip static files
+        run: |
+          cd composeApp/build/dist/wasmJs/productionExecutable
+          zip -r -X "$GITHUB_WORKSPACE/$ASSET" .
+
+      # The Server reserves `/mqtt` and `/admin*`, so the bundle must not contain them.
+      - name: Check zip layout
+        run: |
+          list=$(unzip -Z1 "$ASSET")
+          echo "$list"
+          echo "$list" | grep -qx 'index.html' || { echo "::error::index.html is not at the zip root"; exit 1; }
+          if echo "$list" | grep -Eq '(^|/)mqtt$'; then echo "::error::zip contains a file named mqtt"; exit 1; fi
+          if echo "$list" | grep -Eq '^admin(/|$)'; then echo "::error::zip contains admin/"; exit 1; fi
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "$ASSET" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Web App $GITHUB_REF_NAME" \
+            --generate-notes \
+            --latest=false

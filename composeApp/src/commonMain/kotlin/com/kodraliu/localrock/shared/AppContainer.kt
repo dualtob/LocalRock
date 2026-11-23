@@ -55,10 +55,15 @@ import kotlin.time.TimeSource
 class AppContainer(
     settings: Settings,
     mqttTransport: MqttNativeTransport? = defaultMqttTransport(),
+    /** The Web App's page origin, used as the Server; null in the App. */
+    pageOrigin: String? = null,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    val appSettings: AppSettings = AppSettings(settings)
+    val appSettings: AppSettings = AppSettings(settings, pageOrigin)
+
+    /** True in the Web App: it is given its page's origin, which it uses as the Server. */
+    val isWebApp: Boolean = pageOrigin != null
 
     val messages: MessageCenter = MessageCenter()
 
@@ -295,7 +300,7 @@ class AppContainer(
                     if (!mqttStarted) return@collectLatest
                     messages.showBanner(
                         key = MessageCenter.BANNER_MQTT,
-                        text = "Offline — reconnecting…",
+                        text = mqttOfflineBannerText(isWebApp),
                         severity = MessageSeverity.WARNING,
                         dismissible = false,
                     )
@@ -461,3 +466,10 @@ class AppContainer(
         const val PROBE_LINK_RETRY_DELAY_MS = 500L
     }
 }
+
+/**
+ * The Web App reaches MQTT through the Server that served the page, so a link that stays down
+ * there means the Server can't be reached.
+ */
+internal fun mqttOfflineBannerText(isWebApp: Boolean): String =
+    if (isWebApp) "Can't reach the Server — reconnecting…" else "Offline — reconnecting…"
