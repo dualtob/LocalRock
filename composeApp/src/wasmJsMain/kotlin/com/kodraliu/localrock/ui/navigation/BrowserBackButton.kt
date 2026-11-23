@@ -2,9 +2,8 @@ package com.kodraliu.localrock.ui.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.ui.InternalComposeUiApi
-import androidx.compose.ui.backhandler.LocalCompatNavigationEventDispatcherOwner
 import androidx.navigationevent.NavigationEventInput
+import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
 import kotlinx.browser.window
 import org.w3c.dom.PopStateEvent
 import org.w3c.dom.events.Event
@@ -40,14 +39,10 @@ private class BrowserBackInput : NavigationEventInput() {
     fun dispose() = window.removeEventListener("popstate", onPopState)
 }
 
-/**
- * Makes the browser's back button work like the App's system back gesture. Compose only offers
- * its back dispatcher through an internal composition local; this is the one place that reads it.
- */
-@OptIn(InternalComposeUiApi::class)
+/** Makes the browser's back button work like the App's system back gesture. */
 @Composable
 fun BrowserBackButton() {
-    val dispatcher = LocalCompatNavigationEventDispatcherOwner.current?.navigationEventDispatcher ?: return
+    val dispatcher = LocalNavigationEventDispatcherOwner.current?.navigationEventDispatcher ?: return
     DisposableEffect(dispatcher) {
         val input = BrowserBackInput()
         dispatcher.addInput(input)
