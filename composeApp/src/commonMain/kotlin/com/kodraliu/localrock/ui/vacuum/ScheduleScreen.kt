@@ -211,7 +211,12 @@ internal fun NumberStepper(label: String, value: Int, min: Int, max: Int, step: 
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         StepButton("+") { onChange(steppedWithWrap(value, step, min, max)) }
-        Text(value.toString().padStart(2, '0'), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(
+            value.toString().padStart(2, '0'),
+            modifier = Modifier.clockNumberKeys(value, min, max, step, onChange),
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+        )
         StepButton("−") { onChange(steppedWithWrap(value, -step, min, max)) }
     }
 }

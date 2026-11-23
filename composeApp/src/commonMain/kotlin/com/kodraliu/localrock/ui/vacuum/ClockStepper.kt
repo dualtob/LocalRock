@@ -1,6 +1,19 @@
 package com.kodraliu.localrock.ui.vacuum
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import com.kodraliu.localrock.getPlatform
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -105,3 +118,62 @@ internal fun formatClock(hour: Int, minute: Int, use24: Boolean): String {
     if (use24) return "${hour.toString().padStart(2, '0')}:$mm"
     return "${hour12Of(hour).toString().padStart(2, '0')}:$mm ${if (hour < 12) "AM" else "PM"}"
 }
+
+/**
+ * The number after [digit] is typed into a clock field showing [previous]: appended to it while the
+ * user is [continuing] to type and the result stays within [min]..[max] (1 then 4 makes 14), otherwise
+ * the digit alone (2 then 5 makes 5 for an hour). A digit outside the range on its own changes nothing.
+ */
+internal fun typedClockNumber(previous: Int, digit: Int, min: Int, max: Int, continuing: Boolean): Int {
+    val appended = previous * 10 + digit
+    return when {
+        continuing && appended in min..max -> appended
+        digit in min..max -> digit
+        else -> previous
+    }
+}
+
+/**
+ * Lets a keyboard set a stepper's number in the Web App: Tab focuses it, the arrow keys step it with
+ * wrap-around like the buttons, and digits type it ([typedClockNumber]). The App leaves it untouched.
+ */
+@Composable
+internal fun Modifier.clockNumberKeys(value: Int, min: Int, max: Int, step: Int, onChange: (Int) -> Unit): Modifier {
+    if (!getPlatform().isWebApp) return this
+    // Keys can come faster than the screen recomposes with the new value, so the last number sent is kept here.
+    val current = remember { intArrayOf(value) }
+    current[0] = value
+    val latestChange by rememberUpdatedState(onChange)
+    fun send(next: Int) {
+        current[0] = next
+        latestChange(next)
+    }
+    var focused by remember { mutableStateOf(false) }
+    var typing by remember { mutableStateOf(false) }
+    val ring = MaterialTheme.colorScheme.primary
+    return this
+        .onFocusChanged { focused = it.isFocused; typing = false }
+        .onKeyEvent { event ->
+            if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+            val digit = event.key.digit()
+            when {
+                digit != null -> {
+                    send(typedClockNumber(current[0], digit, min, max, typing))
+                    typing = true
+                }
+                event.key == Key.DirectionUp -> { typing = false; send(steppedWithWrap(current[0], step, min, max)) }
+                event.key == Key.DirectionDown -> { typing = false; send(steppedWithWrap(current[0], -step, min, max)) }
+                else -> return@onKeyEvent false
+            }
+            true
+        }
+        .focusable()
+        .border(2.dp, if (focused) ring else Color.Transparent, RoundedCornerShape(8.dp))
+        .padding(horizontal = 6.dp)
+}
+
+private fun Key.digit(): Int? = DIGIT_KEYS.indexOf(this).takeIf { it >= 0 }
+
+private val DIGIT_KEYS = listOf(
+    Key.Zero, Key.One, Key.Two, Key.Three, Key.Four, Key.Five, Key.Six, Key.Seven, Key.Eight, Key.Nine,
+)
