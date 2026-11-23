@@ -244,6 +244,8 @@ services:
 
 Then point a proxy host such as `https://localrock.example.com` at port 8080 of that machine. The browser never sees port 8080 directly, and nobody has to type the server's address in the Web App: it reads it from `/config.json`, which the container writes from `SERVER_URL` when it starts. Without `SERVER_URL`, the Web App shows "This Web App has no Server set".
 
+> **Publishing the image (maintainers):** GHCR makes a package private when it's first pushed. After the first `web-v*` release, open the package on GitHub (Package settings → Change visibility) and make it public once; until then nobody else can pull it.
+
 **2. Let the Web App's address call the server.** Browsers only let a page call another origin if that origin allows it. Add the Web App's origin (scheme, host and port if not the default, no path or trailing slash) to the server's `config.toml` and restart the server:
 
 ```toml
