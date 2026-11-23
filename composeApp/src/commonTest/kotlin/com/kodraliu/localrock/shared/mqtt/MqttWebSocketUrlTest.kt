@@ -11,8 +11,8 @@ class MqttWebSocketUrlTest {
     @Test
     fun httpsServerWithPortUsesWssOnTheSamePort() {
         assertEquals(
-            "wss://api-roborock.dinglreiter.eu:555/mqtt",
-            mqttWebSocketUrl("https://api-roborock.dinglreiter.eu:555"),
+            "wss://api-roborock.example.com:555/mqtt",
+            mqttWebSocketUrl("https://api-roborock.example.com:555"),
         )
     }
 
