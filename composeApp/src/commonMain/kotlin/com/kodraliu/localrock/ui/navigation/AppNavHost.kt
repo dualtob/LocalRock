@@ -263,8 +263,8 @@ internal data class LaunchState(
 )
 
 /**
- * Where the app goes once the splash is done. The Web App is served by the Server, so it has no
- * intro about setting one up and no Server setup step.
+ * Where the app goes once the splash is done. The Web App's deployment sets its Server, so it has
+ * no intro about setting one up and no Server setup step.
  */
 internal fun firstScreen(state: LaunchState): FirstScreen = with(state) {
     when {

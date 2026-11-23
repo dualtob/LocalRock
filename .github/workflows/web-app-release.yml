@@ -1,15 +1,23 @@
 name: Web App Release
 
-# Builds the production Web App bundle and publishes it as a GitHub Release.
+# Builds the production Web App bundle and publishes it twice (ADR 0002):
+# - as the container image `ghcr.io/dualtob/localrock-web`, tagged with the version without
+#   `web-v` and with `latest` (see web-image/);
+# - as `localrock-web.zip` on a GitHub Release, for hosting the files anywhere else.
 # Triggered by pushing a Web App tag, e.g. `git tag web-v1.0.0 && git push origin web-v1.0.0`.
 # Web App tags (`web-v*`) are separate from App releases, which this workflow ignores.
 #
-# The release asset is always named `localrock-web.zip`, so the Server image can fetch
+# The release asset is always named `localrock-web.zip`, so it can be fetched from
 #   https://github.com/dualtob/LocalRock/releases/download/<tag>/localrock-web.zip
 # Web App releases are never marked "Latest" (that stays with App releases), so
 # `.../releases/latest/download/...` must not be used to find them.
-# The zip holds the static files with `index.html` at its root, ready for the Server's
-# `[web_app] folder` option.
+# The zip holds the static files with `index.html` at its root; whoever hosts it adds a
+# `config.json` next to it that names the Server.
+#
+# Nothing is published until the zip and the image pass their checks. The release is then
+# created as a draft, the image pushed, and the draft published last: a failed push leaves
+# only an unpublished draft, never an image without its release (re-running after a failed
+# push needs the draft deleted first).
 
 on:
   push:
@@ -18,6 +26,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 concurrency:
   group: web-app-release-${{ github.ref_name }}
@@ -25,6 +34,7 @@ concurrency:
 
 env:
   ASSET: localrock-web.zip
+  IMAGE: ghcr.io/dualtob/localrock-web
 
 jobs:
   release:
@@ -50,7 +60,6 @@ jobs:
           cd composeApp/build/dist/wasmJs/productionExecutable
           zip -r -X "$GITHUB_WORKSPACE/$ASSET" .
 
-      # The Server reserves `/mqtt` and `/admin*`, so the bundle must not contain them.
       # "Add to Home Screen" needs the manifest and icons at the root, linked from the page.
       - name: Check zip layout
         run: |
@@ -67,10 +76,19 @@ jobs:
           for src in $icons; do
             echo "$list" | grep -qxF "$src" || { echo "::error::manifest icon $src is not at the zip root"; exit 1; }
           done
-          if echo "$list" | grep -Eq '(^|/)mqtt$'; then echo "::error::zip contains a file named mqtt"; exit 1; fi
-          if echo "$list" | grep -Eq '^admin(/|$)'; then echo "::error::zip contains admin/"; exit 1; fi
 
-      - name: Create release
+      - name: Build image
+        run: |
+          docker build -f web-image/Dockerfile \
+            --label "org.opencontainers.image.version=${GITHUB_REF_NAME#web-v}" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            -t localrock-web:check .
+
+      # Serves the Web App and names the Server given in SERVER_URL, and names none without it.
+      - name: Check image
+        run: web-image/check-image.sh localrock-web:check
+
+      - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -78,4 +96,21 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --title "Web App $GITHUB_REF_NAME" \
             --generate-notes \
-            --latest=false
+            --latest=false \
+            --draft
+
+      - name: Push image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=${GITHUB_REF_NAME#web-v}
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          for tag in "$version" latest; do
+            docker tag localrock-web:check "$IMAGE:$tag"
+            docker push "$IMAGE:$tag"
+          done
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --latest=false

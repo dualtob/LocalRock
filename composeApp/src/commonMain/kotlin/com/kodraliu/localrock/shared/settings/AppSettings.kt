@@ -32,10 +32,10 @@ private const val DEFAULT_MAP_3D_YAW = 35f
 private const val DEFAULT_MAP_3D_TILT = 53f
 
 /**
- * [pageOrigin] is the Web App's page origin, which is the Server: it replaces the stored Server
- * address and can't be changed. Null in the App.
+ * [fixedServer] is the Web App's Server, set by its deployment (see [webAppServer]): it replaces
+ * the stored Server address and can't be changed. Null in the App.
  */
-class AppSettings(private val settings: Settings, private val pageOrigin: String? = null) {
+class AppSettings(private val settings: Settings, private val fixedServer: String? = null) {
 
 
     val installId: String = settings.getStringOrNull(KEY_INSTALL_ID) ?: run {
@@ -45,7 +45,7 @@ class AppSettings(private val settings: Settings, private val pageOrigin: String
     }
 
     private val _serverBaseUrl =
-        MutableStateFlow(pageOrigin ?: settings.getStringOrNull(KEY_SERVER_BASE_URL))
+        MutableStateFlow(fixedServer ?: settings.getStringOrNull(KEY_SERVER_BASE_URL))
     val serverBaseUrl: StateFlow<String?> = _serverBaseUrl.asStateFlow()
 
     private val _introSeen = MutableStateFlow(settings.getBoolean(KEY_INTRO_SEEN, false))
@@ -87,7 +87,7 @@ class AppSettings(private val settings: Settings, private val pageOrigin: String
     }
 
     fun setServerBaseUrl(url: String?) {
-        if (pageOrigin != null) return
+        if (fixedServer != null) return
         if (url.isNullOrBlank()) {
             settings.remove(KEY_SERVER_BASE_URL)
             _serverBaseUrl.value = null

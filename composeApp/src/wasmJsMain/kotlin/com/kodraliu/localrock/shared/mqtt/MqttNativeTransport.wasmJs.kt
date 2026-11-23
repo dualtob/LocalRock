@@ -1,11 +1,14 @@
 package com.kodraliu.localrock.shared.mqtt
 
-/** None by default: the Web App's entry point passes [webAppMqttTransport] for its page's origin. */
+/** None by default: the Web App's entry point passes [webAppMqttTransport] for its Server. */
 actual fun defaultMqttTransport(): MqttNativeTransport? = null
 
-/** The Web App's MQTT: mqtt.js over a WebSocket to `/mqtt` on the Server, which is [pageOrigin]. */
-fun webAppMqttTransport(pageOrigin: String): MqttNativeTransport =
-    MqttJsTransport(mqttWebSocketUrl(pageOrigin), pageId = randomPageId())
+/**
+ * The Web App's MQTT: mqtt.js over a WebSocket to `/mqtt` on [server], the Server its deployment
+ * names, wherever the page itself is served from (ADR 0002).
+ */
+fun webAppMqttTransport(server: String): MqttNativeTransport =
+    MqttJsTransport(mqttWebSocketUrl(server), pageId = randomPageId())
 
 /**
  * MQTT over WebSockets with mqtt.js. Browsers can't open the raw TLS socket the App uses, so the

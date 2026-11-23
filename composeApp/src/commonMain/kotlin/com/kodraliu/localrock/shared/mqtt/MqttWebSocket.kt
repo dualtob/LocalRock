@@ -1,11 +1,11 @@
 package com.kodraliu.localrock.shared.mqtt
 
 /**
- * Where the Web App reaches MQTT: `/mqtt` on the page's own origin (the Server), finished WebSockets.
+ * Where the Web App reaches MQTT: `/mqtt` on the [server] its deployment names, over WebSockets.
  * The host and port in `rriot` are for the App's raw TLS link and are not used here.
  */
-fun mqttWebSocketUrl(pageOrigin: String): String {
-    val origin = pageOrigin.trimEnd('/')
+fun mqttWebSocketUrl(server: String): String {
+    val origin = server.trimEnd('/')
     val wsOrigin = when {
         origin.startsWith("https://") -> "wss://" + origin.removePrefix("https://")
         origin.startsWith("http://") -> "ws://" + origin.removePrefix("http://")

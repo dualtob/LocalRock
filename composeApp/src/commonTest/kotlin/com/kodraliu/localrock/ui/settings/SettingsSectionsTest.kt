@@ -7,7 +7,7 @@ class SettingsSectionsTest {
 
     @Test
     fun the_web_app_has_no_server_field_and_no_alerts() {
-        // The Server is the page's origin, and a browser tab posts no alerts.
+        // The deployment sets the Server, and a browser tab posts no alerts.
         assertEquals(
             listOf(SettingsSection.Appearance, SettingsSection.Contribute, SettingsSection.About),
             settingsSections(isWebApp = true, signedIn = true),

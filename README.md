@@ -54,6 +54,7 @@ LocalRock is a [Kotlin Multiplatform](https://kotlinlang.org/docs/multiplatform.
   - [1. Run the local server](#1-run-the-local-server)
   - [2. Build the app](#2-build-the-app)
   - [3. First‑run setup](#3-first-run-setup)
+  - [4. Run the Web App (optional)](#4-run-the-web-app-optional)
 - [Project structure](#project-structure)
 - [Tech stack](#tech-stack)
 - [Platform status](#platform-status)
@@ -222,6 +223,46 @@ On first launch the app walks you through:
 4. **Device list** — your vacuums appear; tap one to open its map and controls.
 
 To add a new, un‑provisioned vacuum, use the **Add vacuum** flow, which provisions the robot over Wi‑Fi and registers it with the server.
+
+### 4. Run the Web App (optional)
+
+The Web App is LocalRock in a browser, on a computer or a phone (it can be added to the home screen). It runs in its own container at its own address, separate from the server, and calls the server directly from the browser. It needs the [`dualtob/local_roborock_server`](https://github.com/dualtob/local_roborock_server) fork, which adds MQTT over WebSockets and the `cors_allowed_origins` option. Onboarding new robots stays in the app.
+
+**1. Run the image.** Each Web App release (`web-v*` tag) publishes `ghcr.io/dualtob/localrock-web`, tagged with its version (e.g. `0.3.0`) and `latest`. It is stock `nginx:alpine` serving plain HTTP on port 8080; put your reverse proxy (Nginx Proxy Manager, Caddy, Traefik, …) in front for HTTPS. Set `SERVER_URL` to the server's HTTPS root, the same address you'd enter in the app:
+
+```yaml
+# compose.yaml
+services:
+  localrock-web:
+    image: ghcr.io/dualtob/localrock-web:0.3.0
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SERVER_URL: https://api-roborock.example.com:555
+```
+
+Then point a proxy host such as `https://localrock.example.com` at port 8080 of that machine. The browser never sees port 8080 directly, and nobody has to type the server's address in the Web App: it reads it from `/config.json`, which the container writes from `SERVER_URL` when it starts. Without `SERVER_URL`, the Web App shows "This Web App has no Server set".
+
+> **Publishing the image (maintainers):** GHCR makes a package private when it's first pushed. After the first `web-v*` release, open the package on GitHub (Package settings → Change visibility) and make it public once; until then nobody else can pull it.
+
+**2. Let the Web App's address call the server.** Browsers only let a page call another origin if that origin allows it. Add the Web App's origin (scheme, host and port if not the default, no path or trailing slash) to the server's `config.toml` and restart the server:
+
+```toml
+[network]
+mqtt_websocket_enabled = true
+cors_allowed_origins = ["https://localrock.example.com"]
+```
+
+The same list decides which pages may open MQTT over WebSockets at `/mqtt`, which the Web App uses for live status. If the Web App says "Can't reach the Server" while the server is up, check this list first.
+
+**Hosting the files yourself.** Each Web App release also has `localrock-web.zip` with `index.html` at its root, for any static file host (serve `.wasm` as `application/wasm`). Add a `config.json` next to `index.html` that names the server, and add the host's origin to `cors_allowed_origins` as above:
+
+```json
+{"serverUrl": "https://api-roborock.example.com:555"}
+```
+
+A missing file, invalid JSON or a blank `serverUrl` all mean "no Server set".
 
 ---
 

@@ -1,0 +1,4 @@
+# The build context is the repository root; the image only needs the built Web App and this folder.
+*
+!composeApp/build/dist/wasmJs/productionExecutable/
+!web-image/

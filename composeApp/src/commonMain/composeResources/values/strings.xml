@@ -3,6 +3,10 @@
     <!-- Shared -->
     <string name="common_change">Change</string>
 
+    <!-- Web App without a Server -->
+    <string name="web_app_no_server_title">This Web App has no Server set</string>
+    <string name="web_app_no_server_body">Whoever set up this Web App needs to give it the Server's address. Until then, you can't sign in here.</string>
+
     <!-- Login -->
     <string name="login_sign_in">Sign in</string>
     <string name="login_intro">Use the email and login code you set up on your LocalRock server. These are your server's credentials — not a new Roborock account.</string>
