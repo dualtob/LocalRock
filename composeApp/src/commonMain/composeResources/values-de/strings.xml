@@ -3,6 +3,10 @@
     <!-- Shared -->
     <string name="common_change">Ändern</string>
 
+    <!-- Web App without a Server -->
+    <string name="web_app_no_server_title">Für diese Web-App ist kein Server eingestellt</string>
+    <string name="web_app_no_server_body">Wer diese Web-App eingerichtet hat, muss ihr die Adresse des Servers mitgeben. Bis dahin kannst du dich hier nicht anmelden.</string>
+
     <!-- Login -->
     <string name="login_sign_in">Anmelden</string>
     <string name="login_intro">Verwende die E-Mail-Adresse und den Anmeldecode, die du auf deinem LocalRock-Server eingerichtet hast. Das sind die Zugangsdaten deines Servers – kein neues Roborock-Konto.</string>

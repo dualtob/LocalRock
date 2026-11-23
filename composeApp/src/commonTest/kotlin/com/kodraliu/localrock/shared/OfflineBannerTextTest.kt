@@ -4,7 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * The Web App is served by the Server and reaches MQTT through it, so a link that stays down means
+ * The Web App reaches MQTT through its Server's `/mqtt`, so a link that stays down means
  * the Server can't be reached, and the banner says so instead of a generic "offline".
  */
 class OfflineBannerTextTest {

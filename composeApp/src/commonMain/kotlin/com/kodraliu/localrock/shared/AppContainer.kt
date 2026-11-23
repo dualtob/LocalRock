@@ -55,15 +55,15 @@ import kotlin.time.TimeSource
 class AppContainer(
     settings: Settings,
     mqttTransport: MqttNativeTransport? = defaultMqttTransport(),
-    /** The Web App's page origin, used as the Server; null in the App. */
-    pageOrigin: String? = null,
+    /** The Web App's Server, set by its deployment's `config.json` (ADR 0002); null in the App. */
+    fixedServer: String? = null,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    val appSettings: AppSettings = AppSettings(settings, pageOrigin)
+    val appSettings: AppSettings = AppSettings(settings, fixedServer)
 
-    /** True in the Web App: it is given its page's origin, which it uses as the Server. */
-    val isWebApp: Boolean = pageOrigin != null
+    /** True in the Web App: its deployment gives it a fixed Server. */
+    val isWebApp: Boolean = fixedServer != null
 
     val messages: MessageCenter = MessageCenter()
 

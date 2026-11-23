@@ -61,7 +61,7 @@ private const val PRIVACY_URL = "https://donsidro.github.io/LocalRock/"
 internal enum class SettingsSection { Appearance, Connection, Alerts, Contribute, About }
 
 /**
- * The sections Settings shows. The Web App's Server is the page's own origin, so it has no Server
+ * The sections Settings shows. The Web App's Server is set by its deployment, so it has no Server
  * field, and a browser tab posts no alerts. Alerts are about robots, so they wait for sign-in.
  */
 internal fun settingsSections(isWebApp: Boolean, signedIn: Boolean): List<SettingsSection> = buildList {

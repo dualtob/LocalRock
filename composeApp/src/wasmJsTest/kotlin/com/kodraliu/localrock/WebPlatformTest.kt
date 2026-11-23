@@ -7,9 +7,11 @@ import com.kodraliu.localrock.shared.onboarding.vacuumPairingSupported
 import com.kodraliu.localrock.shared.platform.donationUrl
 import com.kodraliu.localrock.shared.platform.donationsEnabled
 import com.kodraliu.localrock.shared.webrtc.liveViewSupported
+import kotlinx.browser.window
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertSame
 
 /** What the Web App reports about its platform-specific features. */
@@ -42,7 +44,10 @@ class WebPlatformTest {
     }
 
     @Test
-    fun the_mqtt_transport_goes_to_the_page_origin() {
-        assertEquals("wss://robots.lan:555/mqtt", (webAppMqttTransport("https://robots.lan:555") as MqttJsTransport).url)
+    fun the_mqtt_transport_goes_to_the_server_whatever_the_pages_address() {
+        val transport = webAppMqttTransport(server = "https://api-roborock.example:555") as MqttJsTransport
+
+        assertNotEquals("https://api-roborock.example:555", window.location.origin)
+        assertEquals("wss://api-roborock.example:555/mqtt", transport.url)
     }
 }

@@ -5,11 +5,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
-/** The Web App reaches MQTT at `/mqtt` on the page's own origin, never at the host in `rriot`. */
+/** The Web App reaches MQTT at `/mqtt` on its Server, never at the host in `rriot`. */
 class MqttWebSocketUrlTest {
 
     @Test
-    fun httpsPageWithPortUsesWssOnTheSamePort() {
+    fun httpsServerWithPortUsesWssOnTheSamePort() {
         assertEquals(
             "wss://api-roborock.dinglreiter.eu:555/mqtt",
             mqttWebSocketUrl("https://api-roborock.dinglreiter.eu:555"),
@@ -17,17 +17,17 @@ class MqttWebSocketUrlTest {
     }
 
     @Test
-    fun httpsPageOnTheDefaultPortKeepsNoPort() {
+    fun httpsServerOnTheDefaultPortKeepsNoPort() {
         assertEquals("wss://robots.example/mqtt", mqttWebSocketUrl("https://robots.example"))
     }
 
     @Test
-    fun plainHttpPageUsesPlainWs() {
+    fun plainHttpServerUsesPlainWs() {
         assertEquals("ws://localhost:8080/mqtt", mqttWebSocketUrl("http://localhost:8080"))
     }
 
     @Test
-    fun trailingSlashOnTheOriginIsIgnored() {
+    fun trailingSlashOnTheServerIsIgnored() {
         assertEquals("wss://localhost:8555/mqtt", mqttWebSocketUrl("https://localhost:8555/"))
     }
 
