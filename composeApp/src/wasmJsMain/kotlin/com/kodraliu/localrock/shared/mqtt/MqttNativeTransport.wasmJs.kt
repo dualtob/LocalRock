@@ -1,10 +1,11 @@
 package com.kodraliu.localrock.shared.mqtt
 
-import kotlinx.browser.window
+/** None by default: the Web App's entry point passes [webAppMqttTransport] for its page's origin. */
+actual fun defaultMqttTransport(): MqttNativeTransport? = null
 
-/** The Web App's MQTT: mqtt.js over a WebSocket to `/mqtt` on the Server, the page's own origin. */
-actual fun defaultMqttTransport(): MqttNativeTransport? =
-    MqttJsTransport(mqttWebSocketUrl(window.location.origin), pageId = randomPageId())
+/** The Web App's MQTT: mqtt.js over a WebSocket to `/mqtt` on the Server, which is [pageOrigin]. */
+fun webAppMqttTransport(pageOrigin: String): MqttNativeTransport =
+    MqttJsTransport(mqttWebSocketUrl(pageOrigin), pageId = randomPageId())
 
 /**
  * MQTT over WebSockets with mqtt.js. Browsers can't open the raw TLS socket the App uses, so the
@@ -13,7 +14,7 @@ actual fun defaultMqttTransport(): MqttNativeTransport? =
  * mqtt.js's own reconnecting is off; [MqttClient] supervises the link, as it does on the App.
  */
 internal class MqttJsTransport(
-    private val url: String,
+    internal val url: String,
     /** Keeps two tabs of the same login from sharing a client ID, see [webPageMqttClientId]. */
     private val pageId: String,
 ) : MqttNativeTransport {

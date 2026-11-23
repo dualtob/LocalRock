@@ -59,14 +59,14 @@ import com.kodraliu.localrock.shared.device.Reachability
 import com.kodraliu.localrock.shared.model.Device
 import com.kodraliu.localrock.shared.vacuum.productDisplayName
 import com.kodraliu.localrock.shared.onboarding.vacuumPairingSupported
-import com.kodraliu.localrock.getPlatform
+import com.kodraliu.localrock.ui.LocalAppContainer
 import com.kodraliu.localrock.ui.AppColors
 import com.kodraliu.localrock.ui.icons.RobotVacuum
 
 /** What the robot list offers for adding a robot. */
 internal sealed interface AddRobotOffer {
     /** Onboarding is available here. */
-    data object Pair : AddRobotOffer
+    data object Onboard : AddRobotOffer
 
     /** No onboarding, and nothing to say about it. */
     data object None : AddRobotOffer
@@ -76,12 +76,12 @@ internal sealed interface AddRobotOffer {
 }
 
 /** Onboarding joins the robot's own Wi-Fi, which a browser can't, so the Web App points to the App. */
-internal fun addRobotOffer(isWebApp: Boolean, pairingSupported: Boolean): AddRobotOffer = when {
+internal fun addRobotOffer(isWebApp: Boolean, onboardingSupported: Boolean): AddRobotOffer = when {
     isWebApp -> AddRobotOffer.NeedsApp(
         "To add a robot, use the LocalRock App on your phone: setting one up joins the robot's " +
             "own Wi-Fi, which a browser can't do. Robots you add there show up here.",
     )
-    pairingSupported -> AddRobotOffer.Pair
+    onboardingSupported -> AddRobotOffer.Onboard
     else -> AddRobotOffer.None
 }
 
@@ -102,7 +102,7 @@ fun DeviceListScreen(
     val error by viewModel.error.collectAsState()
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showOverflow by remember { mutableStateOf(false) }
-    val needsApp = (addRobotOffer(getPlatform().isWebApp, vacuumPairingSupported) as? AddRobotOffer.NeedsApp)?.message
+    val needsApp = (addRobotOffer(LocalAppContainer.current.isWebApp, vacuumPairingSupported) as? AddRobotOffer.NeedsApp)?.message
 
     Scaffold(
         topBar = {

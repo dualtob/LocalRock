@@ -62,7 +62,8 @@ class AppContainer(
 
     val appSettings: AppSettings = AppSettings(settings, pageOrigin)
 
-    private val isWebApp = pageOrigin != null
+    /** True in the Web App: it is given its page's origin, which it uses as the Server. */
+    val isWebApp: Boolean = pageOrigin != null
 
     val messages: MessageCenter = MessageCenter()
 

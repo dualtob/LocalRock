@@ -1,7 +1,5 @@
 package com.kodraliu.localrock.shared.onboarding
 
-private const val ONBOARDING_NEEDS_APP = "Onboarding needs the LocalRock App on a phone"
-
 /** Only Onboarding uses RSA, and the Web App does no Onboarding. */
 actual class RsaKeyPair private constructor() {
     actual val publicKeyPem: String

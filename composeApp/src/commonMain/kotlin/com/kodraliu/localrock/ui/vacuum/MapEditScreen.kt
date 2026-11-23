@@ -7,7 +7,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.WindowInsets
-import com.kodraliu.localrock.getPlatform
+import com.kodraliu.localrock.ui.LocalAppContainer
 import com.kodraliu.localrock.shared.vacuum.RoomType
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.heightIn
@@ -576,7 +576,7 @@ fun MapEditScreen(
     if (showRoomSheet && room != null && pm != null) {
         // Opened at full height in the Web App: a mouse wheel scrolls the sheet's content but can't pull a
         // half-open sheet up, so the lower actions would be out of reach without dragging the handle.
-        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = getPlatform().isWebApp)
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = LocalAppContainer.current.isWebApp)
         ModalBottomSheet(onDismissRequest = { showRoomSheet = false }, sheetState = sheetState) {
             RoomSheet(
                 map = pm,
@@ -779,9 +779,13 @@ private fun EditorCanvas(
                     }
                 }
                 // The mouse wheel zooms about the pointer in the Web App, as a pinch does about the fingers.
-                .wheelZoom(getPlatform().isWebApp, map, viewport) { pointer, zoom ->
-                    val view = size.toSize()
-                    val (newScale, newOffset) = zoomMap(scale, offset, pointer, Offset.Zero, zoom, map.fittedSize(view), view)
+                .wheelZoomFlatMap(
+                    LocalAppContainer.current.isWebApp,
+                    map,
+                    viewport,
+                    fittedSize = { view -> map.fittedSize(view) },
+                    view = { scale to offset },
+                ) { newScale, newOffset ->
                     scale = newScale
                     offset = newOffset
                 }

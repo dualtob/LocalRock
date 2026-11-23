@@ -29,20 +29,20 @@ class WebAppServerTest {
 
     @Test
     fun the_web_app_opens_on_login_with_no_setup_step() {
-        assertEquals(Login, firstScreen(isWebApp = true, introSeen = false, demoMode = false, serverUrl = origin, loggedIn = false))
+        assertEquals(Login, firstScreen(LaunchState(isWebApp = true, introSeen = false, demoMode = false, serverUrl = origin, loggedIn = false)))
     }
 
     @Test
     fun the_web_app_opens_on_the_robot_list_when_logged_in() {
-        assertEquals(DeviceList, firstScreen(isWebApp = true, introSeen = false, demoMode = false, serverUrl = origin, loggedIn = true))
+        assertEquals(DeviceList, firstScreen(LaunchState(isWebApp = true, introSeen = false, demoMode = false, serverUrl = origin, loggedIn = true)))
     }
 
     @Test
     fun the_app_still_starts_with_the_intro_then_server_setup() {
-        assertEquals(Welcome, firstScreen(isWebApp = false, introSeen = false, demoMode = false, serverUrl = null, loggedIn = false))
-        assertEquals(ServerSetup, firstScreen(isWebApp = false, introSeen = true, demoMode = false, serverUrl = null, loggedIn = false))
-        assertEquals(Login, firstScreen(isWebApp = false, introSeen = true, demoMode = false, serverUrl = origin, loggedIn = false))
-        assertEquals(DeviceList, firstScreen(isWebApp = false, introSeen = true, demoMode = true, serverUrl = null, loggedIn = false))
+        assertEquals(Welcome, firstScreen(LaunchState(isWebApp = false, introSeen = false, demoMode = false, serverUrl = null, loggedIn = false)))
+        assertEquals(ServerSetup, firstScreen(LaunchState(isWebApp = false, introSeen = true, demoMode = false, serverUrl = null, loggedIn = false)))
+        assertEquals(Login, firstScreen(LaunchState(isWebApp = false, introSeen = true, demoMode = false, serverUrl = origin, loggedIn = false)))
+        assertEquals(DeviceList, firstScreen(LaunchState(isWebApp = false, introSeen = true, demoMode = true, serverUrl = null, loggedIn = false)))
     }
 
     @Test

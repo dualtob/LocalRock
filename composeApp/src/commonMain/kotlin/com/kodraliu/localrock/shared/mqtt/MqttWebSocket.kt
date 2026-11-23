@@ -1,7 +1,7 @@
 package com.kodraliu.localrock.shared.mqtt
 
 /**
- * Where the Web App reaches MQTT: `/mqtt` on the page's own origin (the Server), over WebSockets.
+ * Where the Web App reaches MQTT: `/mqtt` on the page's own origin (the Server), finished WebSockets.
  * The host and port in `rriot` are for the App's raw TLS link and are not used here.
  */
 fun mqttWebSocketUrl(pageOrigin: String): String {
@@ -26,24 +26,24 @@ class MqttLinkEvents(
     private val onFailed: (reason: String) -> Unit,
     private val onDisconnected: () -> Unit,
 ) {
-    private var up = false
-    private var over = false
+    private var linked = false
+    private var finished = false
 
     fun connected() {
-        if (over || up) return
-        up = true
+        if (finished || linked) return
+        linked = true
         onConnected()
     }
 
     fun error(reason: String) {
-        if (over || up) return
-        over = true
+        if (finished || linked) return
+        finished = true
         onFailed(reason)
     }
 
     fun closed() {
-        if (over) return
-        over = true
-        if (up) onDisconnected() else onFailed("connection closed before MQTT connected")
+        if (finished) return
+        finished = true
+        if (linked) onDisconnected() else onFailed("connection closed before MQTT connected")
     }
 }

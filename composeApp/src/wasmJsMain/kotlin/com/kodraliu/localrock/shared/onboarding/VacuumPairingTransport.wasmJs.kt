@@ -1,6 +1,7 @@
 package com.kodraliu.localrock.shared.onboarding
 
-private const val ONBOARDING_NEEDS_APP = "Onboarding needs the LocalRock App on a phone"
+/** Why every Onboarding call fails in the Web App. */
+internal const val ONBOARDING_NEEDS_APP = "Onboarding needs the LocalRock App on a phone"
 
 /** Onboarding joins the Robot's own Wi-Fi and speaks raw UDP, which a browser cannot do. */
 actual val vacuumPairingSupported: Boolean = false

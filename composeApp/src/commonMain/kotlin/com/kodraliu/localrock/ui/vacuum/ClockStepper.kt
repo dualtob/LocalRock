@@ -13,7 +13,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
-import com.kodraliu.localrock.getPlatform
+import com.kodraliu.localrock.ui.LocalAppContainer
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -139,7 +139,7 @@ internal fun typedClockNumber(previous: Int, digit: Int, min: Int, max: Int, con
  */
 @Composable
 internal fun Modifier.clockNumberKeys(value: Int, min: Int, max: Int, step: Int, onChange: (Int) -> Unit): Modifier {
-    if (!getPlatform().isWebApp) return this
+    if (!LocalAppContainer.current.isWebApp) return this
     // Keys can come faster than the screen recomposes with the new value, so the last number sent is kept here.
     val current = remember { intArrayOf(value) }
     current[0] = value

@@ -160,7 +160,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.kodraliu.localrock.getPlatform
+import com.kodraliu.localrock.ui.LocalAppContainer
 import com.kodraliu.localrock.shared.model.Scene
 import com.kodraliu.localrock.shared.vacuum.DockCapabilities
 import com.kodraliu.localrock.shared.http.currentEpochSeconds
@@ -728,7 +728,7 @@ fun VacuumDetailScreen(
 
     openObstacle?.let { obstacle ->
         // Full height in the Web App, where a mouse wheel can't pull a half-open sheet up to the rest of the photo.
-        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = getPlatform().isWebApp)
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = LocalAppContainer.current.isWebApp)
         ModalBottomSheet(onDismissRequest = { openObstacle = null }, sheetState = sheetState) {
             ObstacleSheetContent(obstacle, loadPhoto = { viewModel.repository.fetchObstaclePhoto(it) })
         }
@@ -1131,7 +1131,7 @@ private fun VacuumMapImage(
                 .fillMaxSize()
                 .clipToBounds()
                 // The mouse wheel zooms about the pointer in the Web App, as a pinch does about the fingers.
-                .wheelZoom(getPlatform().isWebApp, identity, is3D) { pointer, zoom -> moveView(pointer, Offset.Zero, zoom, 0f, 0) }
+                .wheelZoom(LocalAppContainer.current.isWebApp, identity, is3D) { pointer, zoom -> moveView(pointer, Offset.Zero, zoom, 0f, 0) }
                 .pointerInput(identity, is3D) {
                     // Pinch zooms about the fingers. In 3D the model behaves like a maps app's 3D
                     // view: one finger moves it, a two-finger twist turns it to any heading, and two

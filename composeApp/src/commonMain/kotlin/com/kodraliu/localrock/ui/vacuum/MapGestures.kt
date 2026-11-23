@@ -9,11 +9,13 @@ import androidx.compose.foundation.gestures.calculateRotation
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.unit.toSize
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.pow
@@ -111,6 +113,23 @@ internal fun Modifier.wheelZoom(
             }
         }
     }
+
+/**
+ * [wheelZoom] for a flat map drawn at a scale and offset (the zone and editor maps): [view] reads the
+ * current scale and offset, [fittedSize] sizes the map in the view, and [onView] gets the zoomed ones.
+ */
+internal fun Modifier.wheelZoomFlatMap(
+    enabled: Boolean,
+    vararg keys: Any?,
+    fittedSize: (view: Size) -> Size,
+    view: () -> Pair<Float, Offset>,
+    onView: (scale: Float, offset: Offset) -> Unit,
+): Modifier = wheelZoom(enabled, *keys) { pointer, zoom ->
+    val viewSize = size.toSize()
+    val (scale, offset) = view()
+    val (newScale, newOffset) = zoomMap(scale, offset, pointer, Offset.Zero, zoom, fittedSize(viewSize), viewSize)
+    onView(newScale, newOffset)
+}
 
 /**
  * The zoom change for one wheel event of [scrollDeltaPx] pixels, as Compose passes a browser's wheel

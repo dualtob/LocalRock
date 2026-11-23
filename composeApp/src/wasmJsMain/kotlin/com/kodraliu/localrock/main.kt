@@ -3,7 +3,7 @@ package com.kodraliu.localrock
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.window.ComposeViewport
 import com.kodraliu.localrock.shared.AppContainer
-import com.kodraliu.localrock.shared.mqtt.defaultMqttTransport
+import com.kodraliu.localrock.shared.mqtt.webAppMqttTransport
 import com.kodraliu.localrock.ui.navigation.BrowserBackButton
 import com.russhwolf.settings.StorageSettings
 import kotlinx.browser.document
@@ -15,10 +15,11 @@ import kotlinx.browser.window
  */
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
+    val pageOrigin = window.location.origin
     val container = AppContainer(
         StorageSettings(),
-        defaultMqttTransport(),
-        pageOrigin = window.location.origin,
+        webAppMqttTransport(pageOrigin),
+        pageOrigin = pageOrigin,
     )
     ComposeViewport(document.body!!) {
         BrowserBackButton()

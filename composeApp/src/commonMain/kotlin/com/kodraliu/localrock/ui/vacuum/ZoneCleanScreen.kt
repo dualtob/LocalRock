@@ -55,7 +55,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
-import com.kodraliu.localrock.getPlatform
+import com.kodraliu.localrock.ui.LocalAppContainer
 import com.kodraliu.localrock.shared.vacuum.ZoneRect
 import com.kodraliu.localrock.shared.vacuum.map.ParsedMap
 import androidx.compose.ui.geometry.Rect
@@ -174,10 +174,11 @@ fun ZoneCleanScreen(
                                 })
                             }
                             // The mouse wheel zooms about the pointer in the Web App.
-                            .wheelZoom(getPlatform().isWebApp) { pointer, zoom ->
-                                val view = size.toSize()
-                                val (newScale, newOffset) =
-                                    zoomMap(mapScale, mapOffset, pointer, Offset.Zero, zoom, currentMap.fittedSize(view), view)
+                            .wheelZoomFlatMap(
+                                LocalAppContainer.current.isWebApp,
+                                fittedSize = { view -> currentMap.fittedSize(view) },
+                                view = { mapScale to mapOffset },
+                            ) { newScale, newOffset ->
                                 mapScale = newScale
                                 mapOffset = newOffset
                             }
@@ -337,7 +338,7 @@ fun ZoneCleanScreen(
                         sent -> "Zone cleaning started!"
                         selected != null -> "Drag the zone to move it · Drag a corner to resize · Tap elsewhere when done"
                         zones.isNotEmpty() -> "${zones.size} zone(s) — tap a zone to change it, or Start to begin"
-                        else -> zoneDrawHint(getPlatform().isWebApp)
+                        else -> zoneDrawHint(LocalAppContainer.current.isWebApp)
                     },
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     style = MaterialTheme.typography.bodySmall,

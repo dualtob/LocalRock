@@ -1,6 +1,5 @@
 package com.kodraliu.localrock.ui.settings
 
-import com.kodraliu.localrock.getPlatform
 import com.kodraliu.localrock.ui.exceptBottom
 import com.kodraliu.localrock.ui.adaptive.CenteredContent
 import androidx.compose.foundation.layout.Arrangement
@@ -85,7 +84,7 @@ fun SettingsScreen(onDone: () -> Unit, allowCancel: Boolean) {
     var url by remember { mutableStateOf(savedUrl ?: "") }
     var showWhatsNew by remember { mutableStateOf(false) }
     val whatsNew = whatsNewFor(APP_VERSION)
-    val sections = settingsSections(getPlatform().isWebApp, signedIn = userData != null)
+    val sections = settingsSections(container.isWebApp, signedIn = userData != null)
 
     Scaffold(
         topBar = {
