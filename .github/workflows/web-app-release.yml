@@ -56,7 +56,7 @@ jobs:
         run: |
           list=$(unzip -Z1 "$ASSET")
           echo "$list"
-          for f in index.html manifest.webmanifest apple-touch-icon.png icon-192.png icon-512.png favicon-32.png favicon-16.png; do
+          for f in index.html manifest.webmanifest apple-touch-icon.png icon-192.png icon-512.png favicon-32.png favicon-16.png favicon.ico apple-touch-icon-precomposed.png; do
             echo "$list" | grep -qxF "$f" || { echo "::error::$f is not at the zip root"; exit 1; }
           done
           page=$(unzip -p "$ASSET" index.html)
