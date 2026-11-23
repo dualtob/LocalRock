@@ -67,6 +67,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -573,7 +574,10 @@ fun MapEditScreen(
 
     val room = selectedRoom
     if (showRoomSheet && room != null && pm != null) {
-        ModalBottomSheet(onDismissRequest = { showRoomSheet = false }) {
+        // Opened at full height in the Web App: a mouse wheel scrolls the sheet's content but can't pull a
+        // half-open sheet up, so the lower actions would be out of reach without dragging the handle.
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = getPlatform().isWebApp)
+        ModalBottomSheet(onDismissRequest = { showRoomSheet = false }, sheetState = sheetState) {
             RoomSheet(
                 map = pm,
                 segment = room,

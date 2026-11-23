@@ -727,7 +727,9 @@ fun VacuumDetailScreen(
     }
 
     openObstacle?.let { obstacle ->
-        ModalBottomSheet(onDismissRequest = { openObstacle = null }) {
+        // Full height in the Web App, where a mouse wheel can't pull a half-open sheet up to the rest of the photo.
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = getPlatform().isWebApp)
+        ModalBottomSheet(onDismissRequest = { openObstacle = null }, sheetState = sheetState) {
             ObstacleSheetContent(obstacle, loadPhoto = { viewModel.repository.fetchObstaclePhoto(it) })
         }
     }
