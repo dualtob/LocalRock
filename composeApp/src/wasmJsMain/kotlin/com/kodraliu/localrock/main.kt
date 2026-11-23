@@ -10,14 +10,8 @@ import com.kodraliu.localrock.ui.ProvideSafeArea
 import com.kodraliu.localrock.ui.navigation.BrowserBackButton
 import com.russhwolf.settings.StorageSettings
 import kotlinx.browser.document
-import kotlinx.browser.window
 import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.await
 import kotlinx.coroutines.launch
-import org.w3c.fetch.NO_CACHE
-import org.w3c.fetch.RequestCache
-import org.w3c.fetch.RequestInit
-import org.w3c.fetch.Response
 
 /**
  * Web App entry point: the App's root composable, filling `#app` (the visible part of the page,
@@ -38,12 +32,4 @@ fun main() {
             }
         }
     }
-}
-
-/** The text of `config.json` beside the page, or null when it can't be fetched. Never cached. */
-private suspend fun fetchConfigJson(): String? = try {
-    val response = window.fetch("config.json", RequestInit(cache = RequestCache.NO_CACHE)).await<Response>()
-    if (response.ok) response.text().await<JsString>().toString() else null
-} catch (e: Throwable) {
-    null
 }
