@@ -5,6 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="color-scheme" content="light dark">
     <title>LocalRock</title>
+    <!-- "Add to Home Screen": a full-screen LocalRock app with the App's icon. The status bar is
+         see-through over the page, like the App's edge-to-edge bars. -->
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="LocalRock">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#fef7ff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#141218" media="(prefers-color-scheme: dark)">
     <style>
         /* The LocalRock colours (Theme.kt) on Material's neutral background, light or dark like the system. */
         :root { --bg: #fef7ff; --fg: #1d1b20; --muted: #49454f; --accent: #006a6a; }

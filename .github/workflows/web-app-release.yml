@@ -51,11 +51,22 @@ jobs:
           zip -r -X "$GITHUB_WORKSPACE/$ASSET" .
 
       # The Server reserves `/mqtt` and `/admin*`, so the bundle must not contain them.
+      # "Add to Home Screen" needs the manifest and icons at the root, linked from the page.
       - name: Check zip layout
         run: |
           list=$(unzip -Z1 "$ASSET")
           echo "$list"
-          echo "$list" | grep -qx 'index.html' || { echo "::error::index.html is not at the zip root"; exit 1; }
+          for f in index.html manifest.webmanifest apple-touch-icon.png icon-192.png icon-512.png; do
+            echo "$list" | grep -qxF "$f" || { echo "::error::$f is not at the zip root"; exit 1; }
+          done
+          page=$(unzip -p "$ASSET" index.html)
+          for link in 'rel="manifest" href="manifest.webmanifest"' 'rel="apple-touch-icon" href="apple-touch-icon.png"'; do
+            grep -qF "$link" <<<"$page" || { echo "::error::index.html lacks <link $link>"; exit 1; }
+          done
+          icons=$(unzip -p "$ASSET" manifest.webmanifest | jq -er '.icons[].src') || { echo "::error::manifest.webmanifest is not valid JSON with icons"; exit 1; }
+          for src in $icons; do
+            echo "$list" | grep -qxF "$src" || { echo "::error::manifest icon $src is not at the zip root"; exit 1; }
+          done
           if echo "$list" | grep -Eq '(^|/)mqtt$'; then echo "::error::zip contains a file named mqtt"; exit 1; fi
           if echo "$list" | grep -Eq '^admin(/|$)'; then echo "::error::zip contains admin/"; exit 1; fi
 
