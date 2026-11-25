@@ -1103,22 +1103,31 @@ class VacuumRepository(
         }
     }
 
+    // Each read stands alone. One the robot answers without the value (the dock doesn't have that
+    // setting, or the robot doesn't know the command) clears it; one that fails, because the robot is
+    // offline or refused, keeps the last answer, so the dock's rows stay shown meanwhile.
     suspend fun fetchDockSettings() {
-        _dockSettings.value = DockSettings()
-        val wash = runCatching { session.getWashTowelMode().requireOk("get_wash_towel_mode").result as? JsonObject }.getOrNull()
-        _dockSettings.update { it.copy(washMode = (wash?.get("wash_mode") as? JsonPrimitive)?.intOrNull) }
-        val frequency = runCatching { parseSmartWashSettings(session.getSmartWashParams().requireOk("get_smart_wash_params").result) }.getOrNull()
-        _dockSettings.update { it.copy(smartWash = frequency) }
-        val empty = runCatching { session.getDustCollectionMode().requireOk("get_dust_collection_mode").result as? JsonObject }.getOrNull()
-        _dockSettings.update { it.copy(autoEmptyMode = (empty?.get("mode") as? JsonPrimitive)?.intOrNull) }
-        val dryer = runCatching { session.getDryerSetting().requireOk("app_get_dryer_setting").result as? JsonObject }.getOrNull()
-        (dryer?.get("status") as? JsonPrimitive)?.intOrNull?.let { status ->
-            val seconds = ((dryer["on"] as? JsonObject)?.get("dry_time") as? JsonPrimitive)?.intOrNull
-            _dockSettings.update { it.copy(mopDrying = status == 1, dryTimeSeconds = seconds, dryerAnswer = dryer) }
+        suspend fun read(method: String, ask: suspend () -> V1Response): Result<JsonObject?> =
+            runCatching { ask().requireOk(method).result as? JsonObject }
+        fun JsonObject?.int(key: String): Int? = (this?.get(key) as? JsonPrimitive)?.intOrNull
+
+        read("get_wash_towel_mode") { session.getWashTowelMode() }
+            .onSuccess { wash -> _dockSettings.update { it.copy(washMode = wash.int("wash_mode")) } }
+        read("get_smart_wash_params") { session.getSmartWashParams() }
+            .onSuccess { params -> _dockSettings.update { it.copy(smartWash = parseSmartWashSettings(params)) } }
+        read("get_dust_collection_mode") { session.getDustCollectionMode() }
+            .onSuccess { empty -> _dockSettings.update { it.copy(autoEmptyMode = empty.int("mode")) } }
+        read("app_get_dryer_setting") { session.getDryerSetting() }.onSuccess { dryer ->
+            val status = dryer.int("status")
+            val seconds = (dryer?.get("on") as? JsonObject).int("dry_time")
+            _dockSettings.update {
+                if (status == null) it.copy(mopDrying = null, dryTimeSeconds = null, dryerAnswer = null)
+                else it.copy(mopDrying = status == 1, dryTimeSeconds = seconds, dryerAnswer = dryer)
+            }
         }
         // The read answers {"wash_water_temperature": n}, where the setter takes {"values": n}.
-        val temperature = runCatching { session.getWashWaterTemperature().requireOk("get_wash_water_temperature").result as? JsonObject }.getOrNull()
-        _dockSettings.update { it.copy(washWaterTemperature = (temperature?.get("wash_water_temperature") as? JsonPrimitive)?.intOrNull) }
+        read("get_wash_water_temperature") { session.getWashWaterTemperature() }
+            .onSuccess { temperature -> _dockSettings.update { it.copy(washWaterTemperature = temperature.int("wash_water_temperature")) } }
     }
 
     suspend fun setMopDrying(enabled: Boolean) {

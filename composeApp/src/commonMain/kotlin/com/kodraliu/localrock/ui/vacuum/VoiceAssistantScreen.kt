@@ -130,17 +130,20 @@ private fun VoiceAssistantScreen(viewModel: VacuumViewModel, onBack: () -> Unit,
             }
             item { HorizontalDivider(Modifier.padding(start = 72.dp)) }
         }
-        item {
-            SettingRowClickable(
-                icon = Icons.AutoMirrored.Filled.VolumeUp,
-                iconTint = AppColors.Water,
-                title = VoiceStrings.VOLUME,
-                subtitle = volumeLabel(robotSettings.volume),
-                onClick = { showVolumeDialog = true },
-            )
+        robotSettings.volume?.let { volume ->
+            item {
+                SettingRowClickable(
+                    icon = Icons.AutoMirrored.Filled.VolumeUp,
+                    iconTint = AppColors.Water,
+                    title = VoiceStrings.VOLUME,
+                    subtitle = volumeLabel(volume),
+                    onClick = { showVolumeDialog = true },
+                )
+            }
         }
         if (voice.summary != null) {
-            item { HorizontalDivider(Modifier.padding(start = 72.dp)) }
+            // Without a Volume row the item above is already a divider.
+            if (robotSettings.volume != null) item { HorizontalDivider(Modifier.padding(start = 72.dp)) }
             item {
                 SettingRowClickable(
                     icon = Icons.AutoMirrored.Filled.Chat,
@@ -153,11 +156,12 @@ private fun VoiceAssistantScreen(viewModel: VacuumViewModel, onBack: () -> Unit,
         }
     }
 
-    if (showVolumeDialog) {
+    val volume = robotSettings.volume
+    if (showVolumeDialog && volume != null) {
         SimplePickerDialog(
             title = VoiceStrings.VOLUME,
             options = VolumeLevels.map { it.second },
-            selected = volumeLevelIndex(robotSettings.volume),
+            selected = volumeLevelIndex(volume),
             onSelect = { i -> viewModel.report { it.setVolume(VolumeLevels[i].first) }; showVolumeDialog = false },
             onDismiss = { showVolumeDialog = false },
         )

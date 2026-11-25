@@ -3,6 +3,7 @@ package com.kodraliu.localrock
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -11,6 +12,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -18,6 +20,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.kodraliu.localrock.shared.AppContainer
 import kotlinx.coroutines.launch
 import com.kodraliu.localrock.shared.settings.ThemeMode
+import com.kodraliu.localrock.ui.FrameRateOverlay
 import com.kodraliu.localrock.ui.LocalAppContainer
 import com.kodraliu.localrock.ui.SystemBarsAppearance
 import com.kodraliu.localrock.ui.adaptive.ProvideWindowLayout
@@ -30,6 +33,7 @@ import com.kodraliu.localrock.ui.navigation.AppNavHost
 @Composable
 fun App(container: AppContainer) {
     val themeMode by container.appSettings.themeMode.collectAsState()
+    val showFrameRate by container.appSettings.showFrameRate.collectAsState()
     val systemDark = systemInDarkTheme()
     val useDark = when (themeMode) {
         ThemeMode.DARK -> true
@@ -63,11 +67,16 @@ fun App(container: AppContainer) {
         MaterialTheme(colorScheme = colorScheme) {
             ProvideWindowLayout {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    Column(Modifier.fillMaxSize()) {
-                        MessageBannerArea(container.messages)
-                        Box(Modifier.weight(1f)) {
-                            AppNavHost()
-                            TransientMessageHost(container.messages)
+                    Box(Modifier.fillMaxSize()) {
+                        Column(Modifier.fillMaxSize()) {
+                            MessageBannerArea(container.messages)
+                            Box(Modifier.weight(1f)) {
+                                AppNavHost()
+                                TransientMessageHost(container.messages)
+                            }
+                        }
+                        if (container.isWebApp && showFrameRate) {
+                            FrameRateOverlay(Modifier.align(Alignment.BottomStart).safeDrawingPadding())
                         }
                     }
                 }
