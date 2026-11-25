@@ -51,11 +51,14 @@ fun App(container: AppContainer) {
             if (event == Lifecycle.Event.ON_START) {
                 container.setForeground(true)
                 scope.launch {
-                    container.onEnterForeground()
-                    // A robot can drop off while the app is away, and the list is not reloaded on return.
-                    // Only after the link check: the probe renews a silent link too, and two renewals
-                    // at once orphaned the requests of the first.
-                    container.deviceRepository.probeReachability()
+                    try {
+                        container.onEnterForeground()
+                    } finally {
+                        // A robot can drop off while the app is away, and the list is not reloaded on return.
+                        // Only after the link check: the probe renews a silent link too, and two renewals
+                        // at once orphaned the requests of the first. Even if the check threw.
+                        container.deviceRepository.probeReachability()
+                    }
                 }
             }
         }
