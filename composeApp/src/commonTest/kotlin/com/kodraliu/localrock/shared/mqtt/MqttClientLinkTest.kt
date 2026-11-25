@@ -4,6 +4,7 @@ import com.kodraliu.localrock.shared.vacuum.LinkLostException
 import com.kodraliu.localrock.shared.vacuum.VacuumSession
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -14,14 +15,19 @@ import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /** What happens around a link that ends: who hears about it, and what stops waiting. */
 class MqttClientLinkTest {
 
     private val creds = MqttCreds(host = "localhost", port = 8883, tls = true, username = "u", password = "p")
 
-    /** Connects every time; [drop] ends the current link the way a closed socket does. */
-    private class DroppableTransport : MqttNativeTransport {
+    /**
+     * Connects every time; [drop] ends the current link the way a closed socket does.
+     * [answersPings]: true, the broker answers a ping; false, it stays silent; null, no ping at all.
+     */
+    private class DroppableTransport(private val answersPings: Boolean? = null) : MqttNativeTransport {
         var opens = 0
         val published = CompletableDeferred<Unit>()
         private var onDisconnected: (() -> Unit)? = null
@@ -52,7 +58,33 @@ class MqttClientLinkTest {
                     published.complete(Unit)
                 }
                 override fun close() {}
+                override fun ping(onAnswer: () -> Unit): Boolean {
+                    val answers = answersPings ?: return false
+                    if (answers) onAnswer()
+                    return true
+                }
             }
+        }
+    }
+
+    /** Never connects, so the supervisor keeps failing and in time asks for fresh credentials. */
+    private class RefusingTransport : MqttNativeTransport {
+        var opens = 0
+        override fun open(
+            host: String,
+            port: Int,
+            tls: Boolean,
+            username: String,
+            password: String,
+            clientId: String,
+            keepAliveSeconds: Int,
+            onConnected: () -> Unit,
+            onFailed: (reason: String) -> Unit,
+            onMessage: (topic: String, payload: ByteArray) -> Unit,
+            onDisconnected: () -> Unit,
+        ): MqttNativeConnection {
+            opens++
+            throw RuntimeException("Connection refused")
         }
     }
 
@@ -109,6 +141,81 @@ class MqttClientLinkTest {
             }
         } finally {
             session.close()
+            client.disconnect()
+        }
+    }
+
+    @Test
+    fun silence_keeps_counting_while_the_phone_sleeps() = runTest {
+        var nowMs = 1_000_000L
+        val transport = object : MqttNativeTransport {
+            override fun open(
+                host: String, port: Int, tls: Boolean, username: String, password: String, clientId: String,
+                keepAliveSeconds: Int, onConnected: () -> Unit, onFailed: (reason: String) -> Unit,
+                onMessage: (topic: String, payload: ByteArray) -> Unit, onDisconnected: () -> Unit,
+            ): MqttNativeConnection {
+                onConnected()
+                onMessage("t", ByteArray(0))
+                return object : MqttNativeConnection {
+                    override val isConnected = true
+                    override fun subscribe(topic: String, qos: Int) {}
+                    override fun unsubscribe(topic: String) {}
+                    override fun publish(topic: String, payload: ByteArray, qos: Int, retain: Boolean) {}
+                    override fun close() {}
+                }
+            }
+        }
+        val client = MqttClient(transport, nowMs = { nowMs })
+        try {
+            client.start(creds, clientId = "test")
+            client.connected.first { it }
+            assertEquals(0L, client.millisSinceLastMessage())
+            // Ten minutes asleep: a monotonic clock stands still on a sleeping phone, the wall clock doesn't.
+            nowMs += 600_000L
+            assertEquals(600_000L, client.millisSinceLastMessage())
+        } finally {
+            client.disconnect()
+        }
+    }
+
+    @Test
+    fun a_link_check_tells_alive_from_dead_from_unknown() = runTest {
+        for ((answersPings, expected) in listOf(true to true, false to false, null to null)) {
+            val client = MqttClient(DroppableTransport(answersPings))
+            try {
+                client.start(creds, clientId = "test")
+                client.connected.first { it }
+                // Real time: the timeout runs outside runTest's virtual clock.
+                val result = withContext(Dispatchers.Default) { client.checkLink(timeoutMs = 100) }
+                if (expected == null) assertNull(result, "answersPings=$answersPings")
+                else assertEquals(expected, result, "answersPings=$answersPings")
+            } finally {
+                client.disconnect()
+            }
+        }
+    }
+
+    @Test
+    fun a_link_check_with_the_link_down_says_dead() = runTest {
+        val client = MqttClient(DroppableTransport(answersPings = true))
+        assertEquals(false, client.checkLink(timeoutMs = 100))
+    }
+
+    @Test
+    fun a_credential_refresh_that_never_returns_does_not_stop_the_reconnecting() = runTest {
+        val transport = RefusingTransport()
+        val client = MqttClient(transport, initialBackoffMs = 10, credentialRefreshTimeoutMs = 100)
+        var refreshes = 0
+        client.credentialRefresher = { _, _ -> refreshes++; awaitCancellation() }
+        try {
+            client.start(creds, clientId = "test")
+            // Real time: the supervisor runs on its own dispatcher, outside runTest's virtual clock.
+            withContext(Dispatchers.Default) {
+                // Three failures bring the refresh, which hangs; the attempts must go on regardless.
+                withTimeout(5_000) { while (transport.opens < 5) delay(10) }
+            }
+            assertTrue(refreshes >= 1)
+        } finally {
             client.disconnect()
         }
     }
