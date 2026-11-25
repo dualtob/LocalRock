@@ -16,6 +16,9 @@ import com.kodraliu.localrock.shared.vacuum.map.parseB01Map
 import com.kodraliu.localrock.shared.vacuum.map.parseLegacyMap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.async
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -33,6 +36,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -56,6 +60,8 @@ class VacuumRepository(
     private val nowEpochSeconds: () -> Int,
     private val pollIntervalMs: Long = 5_000L,
     private val demo: Boolean = false,
+    /** How long one live-map request waits; a map normally arrives within a few seconds. */
+    private val mapTimeoutMs: Long = 20_000L,
 ) {
     val session: VacuumSession = VacuumSession(
         localKey = localKey,
@@ -77,6 +83,11 @@ class VacuumRepository(
 
     private val _mapStatus = MutableStateFlow("idle")
     val mapStatus: StateFlow<String> = _mapStatus
+
+    private val _mapLoad = MutableStateFlow(MapLoad.IDLE)
+
+    /** Whether the live map is on its way, and whether the last try failed. */
+    val mapLoad: StateFlow<MapLoad> = _mapLoad
 
     private val _rooms = MutableStateFlow<List<ParsedMapRoom>>(emptyList())
     val rooms: StateFlow<List<ParsedMapRoom>> = _rooms
@@ -235,21 +246,12 @@ class VacuumRepository(
             }
         }
         mapPollJob = scope.launch {
-            var loaded = false
             while (isActive) {
                 mqttClient.connected.first { it }
-                runCatching { fetchMap() }
-                    .onSuccess { loaded = true }
+                val failed = runCatching { fetchMap() }
                     .onFailure { println("[VacLocal] fetchMap FAILED: ${it::class.simpleName}: ${it.message}") }
-                // Until a map has arrived, ask again soon: sitting out the idle minute after a
-                // failed first request left the screen without a map for up to two minutes.
-                delay(
-                    when {
-                        !loaded -> MAP_RETRY_MS
-                        _status.value.state in ACTIVE_STATES -> MAP_FAST_POLL_MS
-                        else -> MAP_IDLE_POLL_MS
-                    }
-                )
+                    .isFailure
+                delay(mapPollDelayMs(lastFailed = failed, robotBusy = _status.value.state in ACTIVE_STATES))
             }
         }
     }
@@ -1314,12 +1316,28 @@ class VacuumRepository(
     }
 
     private val mapFetchMutex = Mutex()
+    private val liveMapFetchLock = Mutex()
+    private var liveMapFetch: Deferred<MapResponse>? = null
 
     /**
-     * Serialised because the poll loop and the user's refresh button both call this, and
-     * [VacuumSession] tracks a single outstanding map request — two at once orphaned the first.
+     * The live map. Serialised because the poll loop and the user's refresh button both call this,
+     * and [VacuumSession] tracks a single outstanding map request: two at once orphaned the first.
+     * A call while one is on its way waits for that one, unless [restart]: then the one on its way
+     * is given up (its callers get a [CancellationException], not an error to show) and a fresh
+     * request goes out, so a tap on Refresh never queues behind a request that may be stuck.
      */
-    suspend fun fetchMap(): MapResponse = mapFetchMutex.withLock { fetchMapLocked() }
+    suspend fun fetchMap(restart: Boolean = false): MapResponse {
+        val fetch = liveMapFetchLock.withLock {
+            val running = liveMapFetch
+            if (running != null && running.isActive && !restart) {
+                running
+            } else {
+                running?.cancel()
+                scope.async { mapFetchMutex.withLock { fetchMapLocked() } }.also { liveMapFetch = it }
+            }
+        }
+        return fetch.await()
+    }
 
     /**
      * A saved map, or with [backup] its on-robot backup, for showing in the map list. It takes its
@@ -1363,9 +1381,16 @@ class VacuumRepository(
             return MapResponse(requestId = 0, data = ByteArray(0))
         }
         _mapStatus.value = "requesting…"
-        val sd = createSecurityData(rriotKeyProvider())
+        _mapLoad.value = MapLoad.LOADING
         try {
-            val resp = session.fetchMap(sd, timeoutMs = 60_000L)
+            val resp = fetchMapOnce()
+                ?: run {
+                    // A map normally takes a few seconds. One that hasn't come in time was most
+                    // likely lost with a dead link, so ask once more as soon as the link is up.
+                    println("[VacLocal] map request went unanswered, asking once more")
+                    withTimeoutOrNull(mapTimeoutMs) { mqttClient.connected.first { it } }
+                    fetchMapOnce() ?: throw VacuumException("The robot didn't send its map")
+                }
             _mapBytes.value = resp.data
             val sizeKb = resp.data.size / 1024
             // Try B01 first (Q-series / newer firmware), then legacy "rr"-magic (S-series).
@@ -1389,19 +1414,31 @@ class VacuumRepository(
                 val format = if (b01.isSuccess) "B01" else "legacy"
                 _mapStatus.value = "ok: $sizeKb KB, ${parsed.width}×${parsed.height} $format"
             }
+            _mapLoad.value = MapLoad.IDLE
             return resp
+        } catch (e: CancellationException) {
+            // Given up for a fresh request (see fetchMap's restart), which sets the load state itself.
+            throw e
         } catch (e: Throwable) {
             _mapStatus.value = "failed: ${e::class.simpleName}: ${e.message ?: "(no message)"}"
+            _mapLoad.value = MapLoad.FAILED
             throw e
         }
     }
 
+    /** One live-map request; null when the robot sent nothing in time or the link dropped meanwhile. */
+    private suspend fun fetchMapOnce(): MapResponse? =
+        try {
+            session.fetchMap(createSecurityData(rriotKeyProvider()), timeoutMs = mapTimeoutMs)
+        } catch (e: TimeoutCancellationException) {
+            null
+        } catch (e: LinkLostException) {
+            null
+        }
+
     private companion object {
         val HEX = charArrayOf('0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f')
         val ConsumableJson = Json { ignoreUnknownKeys = true; explicitNulls = false }
-        const val MAP_FAST_POLL_MS = 8_000L
-        const val MAP_IDLE_POLL_MS = 60_000L
-        const val MAP_RETRY_MS = 5_000L
         /** Map requests after a floor switch, [MAP_FAST_POLL_MS] apart: about a minute and a half. */
         const val FLOOR_SWITCH_MAP_REFRESHES = 12
         const val MAX_HISTORY_RECORDS = 20
@@ -1544,4 +1581,21 @@ internal fun JsonElement?.asAnswerInt(key: String? = null): Int? = when (this) {
     is JsonArray -> firstOrNull().asAnswerInt(key)
     is JsonObject -> if (key == null) null else get(key).asAnswerInt()
     else -> null
+}
+
+/** Where the live map stands: not being fetched, on its way, or the last try failed. */
+enum class MapLoad { IDLE, LOADING, FAILED }
+
+private const val MAP_FAST_POLL_MS = 8_000L
+private const val MAP_IDLE_POLL_MS = 60_000L
+private const val MAP_RETRY_MS = 5_000L
+
+/**
+ * How long the map poll waits before asking again. After any failure it asks again soon: sitting out
+ * the idle minute after a failed request left the screen without a map for up to two minutes.
+ */
+internal fun mapPollDelayMs(lastFailed: Boolean, robotBusy: Boolean): Long = when {
+    lastFailed -> MAP_RETRY_MS
+    robotBusy -> MAP_FAST_POLL_MS
+    else -> MAP_IDLE_POLL_MS
 }

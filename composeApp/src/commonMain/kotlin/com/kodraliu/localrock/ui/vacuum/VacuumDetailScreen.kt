@@ -163,6 +163,7 @@ import androidx.compose.ui.unit.sp
 import com.kodraliu.localrock.ui.LocalAppContainer
 import com.kodraliu.localrock.shared.model.Scene
 import com.kodraliu.localrock.shared.vacuum.DockCapabilities
+import com.kodraliu.localrock.shared.vacuum.MapLoad
 import com.kodraliu.localrock.shared.http.currentEpochSeconds
 import kotlinx.datetime.Instant
 import com.kodraliu.localrock.shared.vacuum.DockErrorCodes
@@ -241,6 +242,7 @@ fun VacuumDetailScreen(
 ) {
     val status by viewModel.status.collectAsState()
     val busy by viewModel.busy.collectAsState()
+    val mapLoad by viewModel.repository.mapLoad.collectAsState()
     val mapRotation by viewModel.mapRotation.collectAsState()
     val map3DYaw by viewModel.map3DYaw.collectAsState()
     val map3DTilt by viewModel.map3DTilt.collectAsState()
@@ -650,6 +652,7 @@ fun VacuumDetailScreen(
                 parsedMap = parsedMap,
                 offlineLines = offlineLines,
                 busy = busy,
+                mapLoad = mapLoad,
                 selectedRoomIds = selectedRoomIds,
                 sessionRoomNames = sessionRoomNames,
                 floorMaps = floorMaps,
@@ -806,6 +809,7 @@ private fun MapHeroSection(
     parsedMap: ParsedMap?,
     offlineLines: List<String>,
     busy: Boolean,
+    mapLoad: MapLoad,
     selectedRoomIds: List<Int>,
     sessionRoomNames: List<String>,
     floorMaps: List<FloorMap>,
@@ -855,7 +859,7 @@ private fun MapHeroSection(
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
-            MapEmptyState(busy = busy, onLoadMap = onLoadMap, onRecover = onRecover, modifier = Modifier.fillMaxSize())
+            MapEmptyState(mapLoad = mapLoad, onLoadMap = onLoadMap, onRecover = onRecover, modifier = Modifier.fillMaxSize())
         }
 
         // Refresh and Edit map are the only controls on top of the map; camera, remote and map
@@ -870,12 +874,12 @@ private fun MapHeroSection(
             }
         }
 
+        // Stays tappable while loading: a tap gives up the request on its way and asks afresh.
         FilledTonalIconButton(
             onClick = onLoadMap,
-            enabled = !busy,
             modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp).size(48.dp),
         ) {
-            if (busy) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+            if (mapLoad == MapLoad.LOADING) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
             else Icon(Icons.Default.Refresh, contentDescription = "Refresh map", modifier = Modifier.size(22.dp))
         }
 
@@ -1292,7 +1296,9 @@ private fun VacuumMapImage(
 }
 
 @Composable
-private fun MapEmptyState(busy: Boolean, onLoadMap: () -> Unit, onRecover: () -> Unit, modifier: Modifier = Modifier) {
+private fun MapEmptyState(mapLoad: MapLoad, onLoadMap: () -> Unit, onRecover: () -> Unit, modifier: Modifier = Modifier) {
+    val failed = mapLoad == MapLoad.FAILED
+    val loading = mapLoad == MapLoad.LOADING
     Column(
         modifier = modifier.padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1300,17 +1306,34 @@ private fun MapEmptyState(busy: Boolean, onLoadMap: () -> Unit, onRecover: () ->
     ) {
         Icon(Icons.Default.Map, null, Modifier.size(48.dp), MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(16.dp))
-        Text("No map loaded", style = MaterialTheme.typography.titleMedium)
+        Text(if (failed) "Map didn't load" else "No map loaded", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(4.dp))
-        Text("Load the latest map from your robot.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            when {
+                loading -> "Asking your robot for its map…"
+                failed -> "Your robot didn't send its map. Check that it's on and connected, then try again."
+                else -> "Load the latest map from your robot."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
         Spacer(Modifier.height(20.dp))
-        Button(onClick = onLoadMap, enabled = !busy) {
-            Icon(Icons.Default.Refresh, null)
+        // Tappable while loading too: it gives up the request on its way and asks afresh.
+        Button(onClick = onLoadMap) {
+            if (loading) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = LocalContentColor.current)
+            else Icon(Icons.Default.Refresh, null)
             Spacer(Modifier.width(8.dp))
-            Text(if (busy) "Loading…" else "Load map")
+            Text(
+                when {
+                    failed -> "Retry"
+                    loading -> "Ask again"
+                    else -> "Load map"
+                },
+            )
         }
         Spacer(Modifier.height(4.dp))
-        TextButton(onClick = onRecover, enabled = !busy) {
+        TextButton(onClick = onRecover) {
             Text("Saved maps")
         }
     }
