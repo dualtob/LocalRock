@@ -72,6 +72,32 @@ class DockCapabilitiesTest {
         assertEquals("Unavailable", supported.autoEmptyModeLabel(null))
     }
 
+    @Test
+    fun a_dock_row_shows_once_the_dock_has_answered_for_it() {
+        val capabilities = DockCapabilities("a187", "33554432", null)
+        val answered = DockSettings(washMode = 1, smartWash = SmartWashSettings(0, 900), autoEmptyMode = 0)
+
+        assertEquals(DockRows(washFrequency = true, washMode = true, autoEmpty = true), capabilities.dockRows(answered, dockType = 9, dockStatus = null))
+        assertEquals(DockRows(washFrequency = false, washMode = false, autoEmpty = false), capabilities.dockRows(DockSettings(), dockType = 9, dockStatus = null))
+    }
+
+    @Test
+    fun without_a_known_dock_only_auto_empty_shows() {
+        val capabilities = DockCapabilities("a187", "33554432", null)
+        val answered = DockSettings(washMode = 1, smartWash = SmartWashSettings(0, 900), autoEmptyMode = 0)
+
+        for (dockType in listOf(null, 0)) {
+            assertEquals(DockRows(washFrequency = false, washMode = false, autoEmpty = true), capabilities.dockRows(answered, dockType, dockStatus = null))
+        }
+    }
+
+    @Test
+    fun auto_empty_hides_on_a_robot_without_dust_modes() {
+        val answered = DockSettings(autoEmptyMode = 0)
+
+        assertFalse(DockCapabilities("a187", null, null).dockRows(answered, dockType = 9, dockStatus = null).autoEmpty)
+    }
+
     private fun flags(vararg bits: Int): String {
         val digits = CharArray(38) { '0' }
         for (bit in bits) {

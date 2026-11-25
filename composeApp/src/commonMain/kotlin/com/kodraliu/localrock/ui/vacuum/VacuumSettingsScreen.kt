@@ -1361,12 +1361,10 @@ private fun DockSettingsScreen(
     val washModes = dockCapabilities.washModes(dockType, dockStatus)
     val washModeIndex = washModes.indexOfFirst { it.first == dockCapabilities.washModeCode(dockSettings.washMode, dockType) }
     val autoEmptyModes = dockCapabilities.autoEmptyModes
-    val dockKnown = dockType != null && dockType != 0
-    // A row the dock hasn't answered for is left out rather than greyed out as "Unavailable": either
-    // the dock doesn't have it, or it hasn't been heard from yet, and the row appears once it is.
-    val showWashFrequency = dockKnown && smartWash != null && washFrequencyOptions.isNotEmpty()
-    val showWashMode = dockKnown && dockSettings.washMode != null && washModes.isNotEmpty()
-    val showAutoEmpty = dockSettings.autoEmptyMode != null && autoEmptyModes.isNotEmpty()
+    val rows = dockCapabilities.dockRows(dockSettings, dockType, dockStatus)
+    val showWashFrequency = rows.washFrequency
+    val showWashMode = rows.washMode
+    val showAutoEmpty = rows.autoEmpty
     val emptyWaterTankEnabled = !busy && robotDockedAndIdle
 
     Scaffold(
