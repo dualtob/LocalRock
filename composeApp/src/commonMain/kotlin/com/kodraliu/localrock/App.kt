@@ -1,6 +1,5 @@
 package com.kodraliu.localrock
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,6 +22,7 @@ import com.kodraliu.localrock.ui.LocalAppContainer
 import com.kodraliu.localrock.ui.SystemBarsAppearance
 import com.kodraliu.localrock.ui.adaptive.ProvideWindowLayout
 import com.kodraliu.localrock.ui.appColorScheme
+import com.kodraliu.localrock.ui.systemInDarkTheme
 import com.kodraliu.localrock.ui.messages.MessageBannerArea
 import com.kodraliu.localrock.ui.messages.TransientMessageHost
 import com.kodraliu.localrock.ui.navigation.AppNavHost
@@ -30,7 +30,7 @@ import com.kodraliu.localrock.ui.navigation.AppNavHost
 @Composable
 fun App(container: AppContainer) {
     val themeMode by container.appSettings.themeMode.collectAsState()
-    val systemDark = isSystemInDarkTheme()
+    val systemDark = systemInDarkTheme()
     val useDark = when (themeMode) {
         ThemeMode.DARK -> true
         ThemeMode.LIGHT -> false

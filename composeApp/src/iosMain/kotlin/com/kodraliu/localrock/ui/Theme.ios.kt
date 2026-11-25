@@ -1,5 +1,6 @@
 package com.kodraliu.localrock.ui
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.runtime.Composable
 
@@ -13,3 +14,6 @@ actual fun platformDynamicColorScheme(useDark: Boolean): ColorScheme? = null
  */
 @Composable
 actual fun SystemBarsAppearance(darkTheme: Boolean) = Unit
+
+@Composable
+actual fun systemInDarkTheme(): Boolean = isSystemInDarkTheme()

@@ -1,6 +1,5 @@
 package com.kodraliu.localrock.ui
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,7 +24,9 @@ import org.jetbrains.compose.resources.stringResource
  */
 @Composable
 fun NoServerScreen() {
-    MaterialTheme(colorScheme = appColorScheme(isSystemInDarkTheme())) {
+    val dark = systemInDarkTheme()
+    SystemBarsAppearance(dark)
+    MaterialTheme(colorScheme = appColorScheme(dark)) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             CenteredContent {
                 Column(
