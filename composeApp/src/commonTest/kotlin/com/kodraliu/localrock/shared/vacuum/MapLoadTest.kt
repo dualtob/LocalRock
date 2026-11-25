@@ -77,6 +77,22 @@ class MapLoadTest {
     }
 
     @Test
+    fun with_the_link_still_down_the_second_map_request_waits_only_briefly() =
+        robotTest(mapTimeoutMs = LONG_MAP_TIMEOUT_MS, mapRelinkWaitMs = SHORT_RELINK_WAIT_MS) {
+            withholdMap()
+
+            supervisorScope {
+                val fetch = async { repository.fetchMap() }
+                awaitMapRequests(1)
+                goOffline()
+                // The link stays down. Before, the wait for it took the whole map timeout.
+                withTimeout(LONG_MAP_TIMEOUT_MS / 2) { assertFails(fetch) }
+            }
+
+            assertEquals(MapLoad.FAILED, repository.mapLoad.value)
+        }
+
+    @Test
     fun a_restart_gives_up_the_request_on_its_way_and_asks_afresh() = robotTest(mapTimeoutMs = LONG_MAP_TIMEOUT_MS) {
         withholdMap()
 
@@ -146,6 +162,8 @@ class MapLoadTest {
         const val RETRY_MAP_TIMEOUT_MS = 1_000L
         /** Longer than any test step: the request on its way can't time out meanwhile. */
         const val LONG_MAP_TIMEOUT_MS = 5_000L
+        /** Well below [LONG_MAP_TIMEOUT_MS]. */
+        const val SHORT_RELINK_WAIT_MS = 300L
         const val WAIT_MS = 5_000L
     }
 }

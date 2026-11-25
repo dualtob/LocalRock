@@ -41,7 +41,10 @@ import kotlin.concurrent.Volatile
  *
  * Use it through [robotTest]. Its clocks are real ones: the client and session time out in real time.
  */
-class RobotHarness private constructor(private val mapTimeoutMs: Long) {
+class RobotHarness private constructor(
+    private val mapTimeoutMs: Long,
+    private val mapRelinkWaitMs: Long,
+) {
 
     private val transport = RobotTransport()
 
@@ -67,6 +70,7 @@ class RobotHarness private constructor(private val mapTimeoutMs: Long) {
         nowEpochSeconds = { NOW },
         unsupportedCommandStore = unsupportedCommandStore,
         mapTimeoutMs = mapTimeoutMs,
+        mapRelinkWaitMs = mapRelinkWaitMs,
     )
 
     val session: VacuumSession get() = repository.session
@@ -267,14 +271,16 @@ class RobotHarness private constructor(private val mapTimeoutMs: Long) {
         /**
          * Runs [block] against a connected harness, on [Dispatchers.Default] so that request timeouts
          * run in real time rather than in [runTest]'s skipped-ahead virtual time, which would fire them
-         * before a reply from another thread could arrive. A live-map request waits [mapTimeoutMs].
+         * before a reply from another thread could arrive. A live-map request waits [mapTimeoutMs], and
+         * one that went unanswered waits up to [mapRelinkWaitMs] for a live link before it asks again.
          */
         fun robotTest(
             mapTimeoutMs: Long = SHORT_MAP_TIMEOUT_MS,
+            mapRelinkWaitMs: Long = mapTimeoutMs,
             block: suspend RobotHarness.() -> Unit,
         ): TestResult = runTest {
             withContext(Dispatchers.Default) {
-                val harness = RobotHarness(mapTimeoutMs)
+                val harness = RobotHarness(mapTimeoutMs, mapRelinkWaitMs)
                 try {
                     harness.connect()
                     harness.block()

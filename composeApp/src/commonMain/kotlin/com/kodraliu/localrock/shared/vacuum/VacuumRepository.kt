@@ -65,6 +65,11 @@ class VacuumRepository(
     private val unsupportedCommandStore: UnsupportedCommandStore = UnsupportedCommandStore.InMemory(),
     /** How long one live-map request waits; a map normally arrives within a few seconds. */
     private val mapTimeoutMs: Long = 20_000L,
+    /**
+     * How long a live-map request that went unanswered waits for a live link before it asks once
+     * more: briefly, since the link is normally back within seconds or not soon at all.
+     */
+    private val mapRelinkWaitMs: Long = 5_000L,
 ) {
     private val _unsupportedCommands = MutableStateFlow(unsupportedCommandStore.load())
 
@@ -1422,7 +1427,7 @@ class VacuumRepository(
                     // A map normally takes a few seconds. One that hasn't come in time was most
                     // likely lost with a dead link, so ask once more as soon as the link is up.
                     println("[VacLocal] map request went unanswered, asking once more")
-                    withTimeoutOrNull(mapTimeoutMs) { mqttClient.connected.first { it } }
+                    withTimeoutOrNull(mapRelinkWaitMs) { mqttClient.connected.first { it } }
                     fetchMapOnce() ?: throw VacuumException("The robot didn't send its map")
                 }
             _mapBytes.value = resp.data
