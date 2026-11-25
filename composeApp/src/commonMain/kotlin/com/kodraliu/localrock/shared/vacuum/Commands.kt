@@ -76,6 +76,8 @@ suspend fun VacuumSession.findMe(): V1Response = sendCommand("find_me")
 // parameter is an empty object, not an empty list, and python-roborock does not list this command
 // (it has app_empty_rinse_tank_water, a different one).
 internal const val APP_EMPTY_INBUILT_WATER_TANK = "app_empty_inbuilt_water_tank"
+const val APP_RC_START = "app_rc_start"
+const val APP_START_PET_PATROL = "app_start_pet_patrol"
 
 internal val EMPTY_INBUILT_WATER_TANK_PARAMS: JsonObject = JsonObject(emptyMap())
 

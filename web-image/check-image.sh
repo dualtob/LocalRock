@@ -65,6 +65,11 @@ wasm=$(docker exec "$container" find /usr/share/nginx/html -name '*.wasm') || fa
 wasm=$(head -n1 <<<"$wasm")
 [[ -n $wasm ]] || fail "the image holds no .wasm file"
 expect_type "$base/${wasm#/usr/share/nginx/html/}" application/wasm
+headers=$(curl -fsS -o /dev/null -D - -H 'Accept-Encoding: gzip' "$base/${wasm#/usr/share/nginx/html/}") || fail "$wasm is not served"
+grep -qi '^content-encoding: gzip' <<<"$headers" || fail "$wasm is not served gzipped"
+grep -qi '^cache-control:.*immutable' <<<"$headers" || fail "$wasm is not served as immutable"
+headers=$(curl -fsS -o /dev/null -D - "$base/") || fail "/ is not served"
+grep -qi '^cache-control: no-cache' <<<"$headers" || fail "/ is not served with Cache-Control: no-cache"
 
 expect_type "$base/config.json" application/json
 got=$(curl -fsS "$base/config.json" | jq -er '.serverUrl') || fail "/config.json has no serverUrl"

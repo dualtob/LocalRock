@@ -42,6 +42,7 @@ import com.kodraliu.localrock.shared.vacuum.map.parseB01Map
 import com.kodraliu.localrock.shared.vacuum.map.parseLegacyMap
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
+import com.kodraliu.localrock.shared.vacuum.RobotUnsupportedCommandException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
@@ -414,26 +415,21 @@ class VacuumViewModel(
         repository.detach()
     }
 
+    /**
+     * Asks for the map afresh, giving up any request already on its way. Not queued behind other
+     * actions: the map shows its own progress ([VacuumRepository.mapLoad]), and a request that may
+     * be stuck must never hold the next tap up.
+     */
     fun refreshMap() {
         viewModelScope.launch {
-            pendingActions++
-            _busy.value = true
             try {
-                actionMutex.withLock {
-                    try {
-                        repository.fetchMap()
-                        runCatching { repository.rooms() }
-                        coroutineContext.ensureActive()
-                    } catch (e: Throwable) {
-                        coroutineContext.ensureActive()
-                        container.messages.error(describe(e))
-                        runCatching { repository.forceReconnect() }
-                        coroutineContext.ensureActive()
-                    }
-                }
-            } finally {
-                pendingActions--
-                _busy.value = pendingActions > 0
+                repository.fetchMap(restart = true)
+                runCatching { repository.rooms() }
+            } catch (e: CancellationException) {
+                // A newer tap took over, or the screen closed.
+                throw e
+            } catch (e: Throwable) {
+                container.messages.error(describe(e))
             }
         }
     }
@@ -660,6 +656,7 @@ private fun describe(e: Throwable): String {
         val msg = current.message
         parts += when {
             current is TimeoutCancellationException -> "The robot didn't answer in time"
+            current is RobotUnsupportedCommandException -> "Your robot doesn't support this"
             msg.isNullOrBlank() -> current::class.simpleName ?: "Throwable"
             else -> msg
         }

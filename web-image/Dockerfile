@@ -14,6 +14,9 @@ ENV NGINX_ENVSUBST_OUTPUT_DIR=/usr/share/nginx/html
 COPY web-image/default.conf /etc/nginx/conf.d/default.conf
 COPY web-image/config.json.template /etc/nginx/templates/config.json.template
 COPY composeApp/build/dist/wasmJs/productionExecutable/ /usr/share/nginx/html/
+# Gzipped copies for gzip_static (default.conf); -k keeps the originals for clients without gzip.
+RUN find /usr/share/nginx/html -type f \( -name '*.wasm' -o -name '*.js' -o -name '*.html' -o -name '*.json' -o -name '*.webmanifest' \) \
+        -exec gzip -9 -k {} +
 
 LABEL org.opencontainers.image.source=https://github.com/dualtob/LocalRock
 LABEL org.opencontainers.image.description="LocalRock Web App"

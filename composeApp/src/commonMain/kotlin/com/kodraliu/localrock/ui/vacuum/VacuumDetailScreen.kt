@@ -163,6 +163,9 @@ import androidx.compose.ui.unit.sp
 import com.kodraliu.localrock.ui.LocalAppContainer
 import com.kodraliu.localrock.shared.model.Scene
 import com.kodraliu.localrock.shared.vacuum.DockCapabilities
+import com.kodraliu.localrock.shared.vacuum.APP_RC_START
+import com.kodraliu.localrock.shared.vacuum.APP_START_PET_PATROL
+import com.kodraliu.localrock.shared.vacuum.MapLoad
 import com.kodraliu.localrock.shared.http.currentEpochSeconds
 import kotlinx.datetime.Instant
 import com.kodraliu.localrock.shared.vacuum.DockErrorCodes
@@ -251,7 +254,12 @@ fun VacuumDetailScreen(
     val supportsVacuumThenMopRepeat by viewModel.supportsVacuumThenMopRepeat.collectAsState()
     val supportsCleanEfficiency by viewModel.supportsCleanEfficiency.collectAsState()
     val supportsPetSearch by viewModel.supportsPetSearch.collectAsState()
+    val unsupportedCommands by viewModel.repository.unsupportedCommands.collectAsState()
+    // Shown until the robot refuses it once (it has no read command to ask first), then hidden.
+    val showFindPet = supportsPetSearch && APP_START_PET_PATROL !in unsupportedCommands
+    val showRemote = APP_RC_START !in unsupportedCommands
     val liveMap by viewModel.repository.parsedMap.collectAsState()
+    val mapLoad by viewModel.repository.mapLoad.collectAsState()
     val lastKnown by viewModel.lastKnown.collectAsState()
     val lastKnownMap by viewModel.lastKnownMap.collectAsState()
     // A robot carried to its dock keeps its old map position until it re-localizes, so draw it at the charger.
@@ -387,7 +395,7 @@ fun VacuumDetailScreen(
 
     val PanelBody: @Composable (DetailPanel) -> Unit = { currentPanel ->
         when (currentPanel) {
-            DetailPanel.More -> MoreActionsSheetContent(showFindPet = supportsPetSearch, onAction = onMoreAction)
+            DetailPanel.More -> MoreActionsSheetContent(showFindPet = showFindPet, showRemote = showRemote, onAction = onMoreAction)
 
             DetailPanel.Routines -> RoutinesSheetContent(
                 state = routines,
@@ -650,6 +658,7 @@ fun VacuumDetailScreen(
                 parsedMap = parsedMap,
                 offlineLines = offlineLines,
                 busy = busy,
+                mapLoad = mapLoad,
                 selectedRoomIds = selectedRoomIds,
                 sessionRoomNames = sessionRoomNames,
                 floorMaps = floorMaps,
@@ -708,7 +717,7 @@ fun VacuumDetailScreen(
                             }
                             PanelBody(headed)
                         } else {
-                            MoreActionsSheetContent(showFindPet = supportsPetSearch, onAction = onMoreAction)
+                            MoreActionsSheetContent(showFindPet = showFindPet, showRemote = showRemote, onAction = onMoreAction)
                         }
                     }
 
@@ -806,6 +815,7 @@ private fun MapHeroSection(
     parsedMap: ParsedMap?,
     offlineLines: List<String>,
     busy: Boolean,
+    mapLoad: MapLoad,
     selectedRoomIds: List<Int>,
     sessionRoomNames: List<String>,
     floorMaps: List<FloorMap>,
@@ -855,7 +865,7 @@ private fun MapHeroSection(
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
-            MapEmptyState(busy = busy, onLoadMap = onLoadMap, onRecover = onRecover, modifier = Modifier.fillMaxSize())
+            MapEmptyState(mapLoad = mapLoad, onLoadMap = onLoadMap, onRecover = onRecover, modifier = Modifier.fillMaxSize())
         }
 
         // Refresh and Edit map are the only controls on top of the map; camera, remote and map
@@ -870,12 +880,12 @@ private fun MapHeroSection(
             }
         }
 
+        // Stays tappable while loading: a tap gives up the request on its way and asks afresh.
         FilledTonalIconButton(
             onClick = onLoadMap,
-            enabled = !busy,
             modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp).size(48.dp),
         ) {
-            if (busy) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+            if (mapLoad == MapLoad.LOADING) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
             else Icon(Icons.Default.Refresh, contentDescription = "Refresh map", modifier = Modifier.size(22.dp))
         }
 
@@ -1292,7 +1302,9 @@ private fun VacuumMapImage(
 }
 
 @Composable
-private fun MapEmptyState(busy: Boolean, onLoadMap: () -> Unit, onRecover: () -> Unit, modifier: Modifier = Modifier) {
+private fun MapEmptyState(mapLoad: MapLoad, onLoadMap: () -> Unit, onRecover: () -> Unit, modifier: Modifier = Modifier) {
+    val failed = mapLoad == MapLoad.FAILED
+    val loading = mapLoad == MapLoad.LOADING
     Column(
         modifier = modifier.padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1300,17 +1312,28 @@ private fun MapEmptyState(busy: Boolean, onLoadMap: () -> Unit, onRecover: () ->
     ) {
         Icon(Icons.Default.Map, null, Modifier.size(48.dp), MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(16.dp))
-        Text("No map loaded", style = MaterialTheme.typography.titleMedium)
+        Text(if (failed) "Map didn't load" else "No map loaded", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(4.dp))
-        Text("Load the latest map from your robot.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            when {
+                failed -> "Your robot didn't send its map. Check that it's on and connected, then try again."
+                loading -> "Asking your robot for its map…"
+                else -> "Load the latest map from your robot."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
         Spacer(Modifier.height(20.dp))
-        Button(onClick = onLoadMap, enabled = !busy) {
-            Icon(Icons.Default.Refresh, null)
+        // Tappable while loading too: it gives up the request on its way and asks afresh.
+        Button(onClick = onLoadMap) {
+            if (loading) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = LocalContentColor.current)
+            else Icon(Icons.Default.Refresh, null)
             Spacer(Modifier.width(8.dp))
-            Text(if (busy) "Loading…" else "Load map")
+            Text(if (failed) "Retry" else if (loading) "Ask again" else "Load map")
         }
         Spacer(Modifier.height(4.dp))
-        TextButton(onClick = onRecover, enabled = !busy) {
+        TextButton(onClick = onRecover) {
             Text("Saved maps")
         }
     }
@@ -1560,7 +1583,7 @@ private fun ControlBar(
 private enum class MoreAction { ROOMS, ZONES, PIN_GO, REMOTE, SCHEDULE, CAMERA, DOCK, HISTORY, MAPS, EDIT_MAP, ROUTINES, FIND_PET }
 
 @Composable
-private fun MoreActionsSheetContent(showFindPet: Boolean, onAction: (MoreAction) -> Unit) {
+private fun MoreActionsSheetContent(showFindPet: Boolean, showRemote: Boolean, onAction: (MoreAction) -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1582,7 +1605,11 @@ private fun MoreActionsSheetContent(showFindPet: Boolean, onAction: (MoreAction)
             MoreActionItem(Modifier.weight(1f), Icons.Default.Place, "Pin & Go", AppColors.AccentPurple) { onAction(MoreAction.PIN_GO) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MoreActionItem(Modifier.weight(1f), Icons.Default.Gamepad, "Remote", AppColors.AccentCyan) { onAction(MoreAction.REMOTE) }
+            if (showRemote) {
+                MoreActionItem(Modifier.weight(1f), Icons.Default.Gamepad, "Remote", AppColors.AccentCyan) { onAction(MoreAction.REMOTE) }
+            } else {
+                Spacer(Modifier.weight(1f))
+            }
             MoreActionItem(Modifier.weight(1f), Icons.Default.Schedule, "Schedule", AppColors.Water) { onAction(MoreAction.SCHEDULE) }
             // Camera is hidden for now; MoreAction.CAMERA and the live view screen stay in place.
             MoreActionItem(Modifier.weight(1f), Icons.Default.Edit, "Edit map", AppColors.AccentRed) { onAction(MoreAction.EDIT_MAP) }
