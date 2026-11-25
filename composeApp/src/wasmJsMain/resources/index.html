@@ -64,6 +64,25 @@
             } else {
                 document.documentElement.className = "unsupported";
             }
+            // Keeps the App's files on the phone for an instant start (sw.js). Not on localhost,
+            // where it would keep serving an old development build.
+            var local = ["localhost", "127.0.0.1", "[::1]"].indexOf(location.hostname) >= 0;
+            if ("serviceWorker" in navigator && !local) {
+                // On the first launch the page loaded its files before the worker took over, so it
+                // tells the worker which, to keep them too. Once more a little later, for files
+                // still loading at that moment.
+                navigator.serviceWorker.addEventListener("controllerchange", function () {
+                    function report() {
+                        var worker = navigator.serviceWorker.controller;
+                        if (!worker) return;
+                        var urls = performance.getEntriesByType("resource").map(function (entry) { return entry.name; });
+                        worker.postMessage({ type: "loaded", urls: urls });
+                    }
+                    report();
+                    setTimeout(report, 10000);
+                });
+                navigator.serviceWorker.register("sw.js").catch(function () {});
+            }
         })();
     </script>
 </head>
