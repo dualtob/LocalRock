@@ -1,5 +1,6 @@
 package com.kodraliu.localrock.shared
 
+import com.kodraliu.localrock.shared.vacuum.UnsupportedCommandStore
 import com.russhwolf.settings.Settings
 import com.kodraliu.localrock.shared.auth.AuthRepository
 import com.kodraliu.localrock.shared.auth.LoginApi
@@ -436,6 +437,10 @@ class AppContainer(
             topicsProvider = topicsProvider,
             nowEpochSeconds = { currentEpochSeconds().toInt() },
             demo = isDemo,
+            unsupportedCommandStore = if (isDemo) UnsupportedCommandStore.InMemory() else object : UnsupportedCommandStore {
+                override fun load() = appSettings.unsupportedCommands(device.duid)
+                override fun save(commands: Set<String>) = appSettings.setUnsupportedCommands(device.duid, commands)
+            },
         ).apply {
             setHomeRooms(deviceRepository.home.value?.rooms ?: emptyList())
         }

@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -56,7 +57,26 @@ class VacuumRepository(
     private val nowEpochSeconds: () -> Int,
     private val pollIntervalMs: Long = 5_000L,
     private val demo: Boolean = false,
+    private val unsupportedCommandStore: UnsupportedCommandStore = UnsupportedCommandStore.InMemory(),
 ) {
+    private val _unsupportedCommands = MutableStateFlow(unsupportedCommandStore.load())
+
+    /**
+     * Commands this Robot has answered with unknown_method, remembered across restarts. An action
+     * with no read command to ask first is shown until the Robot refuses it once, then hidden.
+     */
+    val unsupportedCommands: StateFlow<Set<String>> = _unsupportedCommands
+
+    /** [requireOk], and when the Robot doesn't know [method]: remembers [key] and fails. */
+    private fun V1Response.requireSupported(method: String, key: String = method): V1Response {
+        if (isUnknownMethod()) {
+            val updated = _unsupportedCommands.updateAndGet { it + key }
+            unsupportedCommandStore.save(updated)
+            throw RobotUnsupportedCommandException(method)
+        }
+        return requireOk(method)
+    }
+
     val session: VacuumSession = VacuumSession(
         localKey = localKey,
         mqtt = mqttClient,
@@ -518,7 +538,7 @@ class VacuumRepository(
         if (!fresh.isDockedAndIdle()) {
             throw IllegalStateException("Dock the robot and finish its current task before looking for your pet")
         }
-        session.startPetSearch().requireOk("app_start_pet_patrol")
+        session.startPetSearch().requireSupported(APP_START_PET_PATROL)
     }
 
     suspend fun fetchMatterStatus(): MatterInfo? =
@@ -533,7 +553,7 @@ class VacuumRepository(
 
     suspend fun resetMatter() { session.resetMatter().requireOk("matter.reset") }
 
-    suspend fun startRemoteControl() { session.appRcStart() }
+    suspend fun startRemoteControl() { session.appRcStart().requireSupported(APP_RC_START) }
 
     suspend fun moveRemote(velocity: Double, omega: Double, durationMs: Int) {
         session.appRcMove(velocity, omega, durationMs)
@@ -1050,7 +1070,7 @@ class VacuumRepository(
                     complete = false
                     break
                 }
-                if (state.answered && state.toggleable) states += state
+                if (state.answered && state.toggleable && featureCommandKey(def.id) !in _unsupportedCommands.value) states += state
             }
             // Shown in the list's own order, not the order they were read in.
             _betaFeatures.value = states.sortedBy { defs.indexOf(it.def) }.withoutReplaced()
@@ -1091,6 +1111,11 @@ class VacuumRepository(
                 if (last.error?.get("code")?.jsonPrimitive?.intOrNull !in BetaShapeRefusalCodes) break
             }
             sent = last
+        }
+        if (sent?.isUnknownMethod() == true) {
+            // Several options share one write command, so the refusal is remembered for this option alone.
+            _betaFeatures.update { list -> list.filter { it.def.id != id } }
+            sent.requireSupported(method, featureCommandKey(id))
         }
         // Read back before requireOk on purpose: a refused write still refreshes the row with the robot's real value.
         refreshBetaFeature(current.def)
@@ -1202,7 +1227,7 @@ class VacuumRepository(
         if (!fresh.isDockedAndIdle()) {
             throw IllegalStateException("Dock the robot and finish its current task before emptying its water tank")
         }
-        session.emptyInbuiltWaterTank().requireOk(APP_EMPTY_INBUILT_WATER_TANK)
+        session.emptyInbuiltWaterTank().requireSupported(APP_EMPTY_INBUILT_WATER_TANK)
     }
 
 

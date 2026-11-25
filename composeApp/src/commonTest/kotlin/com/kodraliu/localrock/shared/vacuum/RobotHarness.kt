@@ -41,13 +41,25 @@ class RobotHarness private constructor() {
 
     val mqtt = MqttClient(transport, initialBackoffMs = 10L)
 
-    val repository = VacuumRepository(
+    /** Where [repository] keeps the commands the Robot refused as unknown. */
+    val unsupportedCommandStore = UnsupportedCommandStore.InMemory()
+
+    val repository = newRepository()
+
+    /**
+     * A second repository for the same Robot on the same [unsupportedCommandStore], as the app builds
+     * after a restart. It isn't started; read what it loaded, don't send through it.
+     */
+    fun repositoryOnSameStore(): VacuumRepository = newRepository()
+
+    private fun newRepository() = VacuumRepository(
         duid = DUID,
         localKey = LOCAL_KEY,
         rriotKeyProvider = { "" },
         mqttClient = mqtt,
         topicsProvider = { TOPICS },
         nowEpochSeconds = { NOW },
+        unsupportedCommandStore = unsupportedCommandStore,
     )
 
     val session: VacuumSession get() = repository.session

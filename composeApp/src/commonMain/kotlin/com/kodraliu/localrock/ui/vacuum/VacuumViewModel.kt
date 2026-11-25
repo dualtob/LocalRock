@@ -1,5 +1,6 @@
 package com.kodraliu.localrock.ui.vacuum
 
+import com.kodraliu.localrock.shared.vacuum.RobotUnsupportedCommandException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kodraliu.localrock.shared.AppContainer
@@ -660,6 +661,7 @@ private fun describe(e: Throwable): String {
         val msg = current.message
         parts += when {
             current is TimeoutCancellationException -> "The robot didn't answer in time"
+            current is RobotUnsupportedCommandException -> "Your robot doesn't support this"
             msg.isNullOrBlank() -> current::class.simpleName ?: "Throwable"
             else -> msg
         }

@@ -74,4 +74,6 @@ suspend fun VacuumSession.downloadMatterKey(): V1Response = sendCommandRaw("matt
 suspend fun VacuumSession.resetMatter(): V1Response = sendCommandRaw("matter.reset", NoParams)
 
 /** Find my Pet: the robot goes looking and reports found or not found as an event. */
-suspend fun VacuumSession.startPetSearch(): V1Response = sendCommandRaw("app_start_pet_patrol", NoParams)
+const val APP_START_PET_PATROL = "app_start_pet_patrol"
+
+suspend fun VacuumSession.startPetSearch(): V1Response = sendCommandRaw(APP_START_PET_PATROL, NoParams)

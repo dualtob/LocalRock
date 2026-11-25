@@ -133,6 +133,18 @@ class AppSettings(private val settings: Settings, private val fixedServer: Strin
         _wifiPassword.value = password
     }
 
+    /** Commands the Robot [duid] answered with unknown_method, see UnsupportedCommandStore. */
+    fun unsupportedCommands(duid: String): Set<String> =
+        settings.getStringOrNull(unsupportedCommandsKey(duid))
+            ?.split(',')?.filter { it.isNotBlank() }?.toSet()
+            ?: emptySet()
+
+    fun setUnsupportedCommands(duid: String, commands: Set<String>) {
+        settings.putString(unsupportedCommandsKey(duid), commands.sorted().joinToString(","))
+    }
+
+    private fun unsupportedCommandsKey(duid: String) = "unsupported_commands_$duid"
+
     /** The robot most recently opened, so a fresh launch can go straight back to it. */
     private val _lastOpenedDuid = MutableStateFlow(settings.getStringOrNull(KEY_LAST_OPENED_DUID))
     val lastOpenedDuid: StateFlow<String?> = _lastOpenedDuid.asStateFlow()

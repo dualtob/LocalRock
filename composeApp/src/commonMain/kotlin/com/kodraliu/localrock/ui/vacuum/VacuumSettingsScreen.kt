@@ -1,5 +1,8 @@
 package com.kodraliu.localrock.ui.vacuum
 
+import com.kodraliu.localrock.shared.vacuum.APP_RC_START
+import com.kodraliu.localrock.shared.vacuum.APP_EMPTY_INBUILT_WATER_TANK
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -200,6 +203,7 @@ fun VacuumSettingsScreen(
     val rooms by repository.rooms.collectAsState()
     val firmwareUpdate by viewModel.firmwareUpdate.collectAsState()
     val betaFeatures by repository.betaFeatures.collectAsState()
+    val unsupportedCommands by repository.unsupportedCommands.collectAsState()
     val betaFeaturesLoading by repository.betaFeaturesLoading.collectAsState()
     val betaFeatureDefs by viewModel.betaFeatureDefs.collectAsState()
     val unlistedFeatures by viewModel.unlistedFeatures.collectAsState()
@@ -297,7 +301,9 @@ fun VacuumSettingsScreen(
             onWashModeChange = { mode -> viewModel.run { it.setWashMode(mode) } },
             onWashFrequencyChange = { mode, minutes -> viewModel.run { it.setWashFrequency(mode, minutes) } },
             onAutoEmptyModeChange = { mode -> viewModel.run { it.setAutoEmptyMode(mode) } },
-            onEmptyWaterTank = { viewModel.run("Emptying the water tank") { it.emptyInbuiltWaterTank() } },
+            // Shown until the Robot refuses it once: there is no read command to ask first.
+            onEmptyWaterTank = if (APP_EMPTY_INBUILT_WATER_TANK in unsupportedCommands) null
+                else { { viewModel.run("Emptying the water tank") { it.emptyInbuiltWaterTank() } } },
             features = betaFeatures.inSection(FeatureSection.DOCK),
             onFeatureToggle = { id, on -> viewModel.report { it.setBetaFeature(id, on) } },
             onFeatureChoice = { id, value -> viewModel.report { it.setBetaChoice(id, value) } },
@@ -370,7 +376,10 @@ fun VacuumSettingsScreen(
 fun VacuumRemoteScreen(viewModel: VacuumViewModel, onBack: () -> Unit) {
     val repository = viewModel.repository
     val scope = rememberCoroutineScope()
-    LaunchedEffect(Unit) { runCatching { repository.startRemoteControl() } }
+    val unsupportedCommands by repository.unsupportedCommands.collectAsState()
+    // A Robot that doesn't know app_rc_start can't be driven: the error says so and the screen closes.
+    LaunchedEffect(Unit) { viewModel.run { it.startRemoteControl() } }
+    LaunchedEffect(unsupportedCommands) { if (APP_RC_START in unsupportedCommands) onBack() }
     RemoteControlScreen(
         onMove = { v, o -> scope.launch { runCatching { repository.moveRemote(v, o, 1500) } } },
         onStop = { scope.launch { runCatching { repository.stopRemoteControl() } } },
@@ -1328,7 +1337,8 @@ private fun DockSettingsScreen(
     onWashModeChange: (Int) -> Unit,
     onWashFrequencyChange: (Int, Int?) -> Unit,
     onAutoEmptyModeChange: (Int) -> Unit,
-    onEmptyWaterTank: () -> Unit,
+    /** Null when the Robot refused the command as unknown, and the row is left out. */
+    onEmptyWaterTank: (() -> Unit)?,
     features: List<BetaFeatureState>,
     onFeatureToggle: (String, Boolean) -> Unit,
     onFeatureChoice: (String, Int) -> Unit,
@@ -1469,26 +1479,29 @@ private fun DockSettingsScreen(
                         )
                     }
                 }
-                divider()
-                item {
-                    SettingRowClickable(
-                        icon = Icons.Default.WaterDrop,
-                        iconTint = AppColors.Water,
-                        title = "Internal water tank",
-                        subtitle = "Empty through the dock",
-                        enabled = emptyWaterTankEnabled,
-                        onClick = { confirmEmptyTank = true },
-                    )
+                if (onEmptyWaterTank != null) {
+                    divider()
+                    item {
+                        SettingRowClickable(
+                            icon = Icons.Default.WaterDrop,
+                            iconTint = AppColors.Water,
+                            title = "Internal water tank",
+                            subtitle = "Empty through the dock",
+                            enabled = emptyWaterTankEnabled,
+                            onClick = { confirmEmptyTank = true },
+                        )
+                    }
                 }
-                items(features, key = { it.def.id }) { f ->
-                    HorizontalDivider(Modifier.padding(start = 72.dp))
+                val featuresFirst = first
+                itemsIndexed(features, key = { _, f -> f.def.id }) { index, f ->
+                    if (!(featuresFirst && index == 0)) HorizontalDivider(Modifier.padding(start = 72.dp))
                     FeatureToggleRow(f, onFeatureToggle, onFeatureChoice)
                 }
             }
         }
     }
 
-    if (confirmEmptyTank) {
+    if (confirmEmptyTank && onEmptyWaterTank != null) {
         AlertDialog(
             onDismissRequest = { confirmEmptyTank = false },
             title = { Text("Empty the water tank?") },
@@ -1496,7 +1509,7 @@ private fun DockSettingsScreen(
             confirmButton = {
                 TextButton(
                     enabled = emptyWaterTankEnabled,
-                    onClick = { confirmEmptyTank = false; onEmptyWaterTank() },
+                    onClick = { confirmEmptyTank = false; onEmptyWaterTank?.invoke() },
                 ) { Text("Mops removed, start") }
             },
             dismissButton = { TextButton(onClick = { confirmEmptyTank = false }) { Text("Cancel") } },

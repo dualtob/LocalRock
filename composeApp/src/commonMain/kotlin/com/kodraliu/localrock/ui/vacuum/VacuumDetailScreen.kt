@@ -1,5 +1,7 @@
 package com.kodraliu.localrock.ui.vacuum
 
+import com.kodraliu.localrock.shared.vacuum.APP_START_PET_PATROL
+import com.kodraliu.localrock.shared.vacuum.APP_RC_START
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -251,6 +253,11 @@ fun VacuumDetailScreen(
     val supportsVacuumThenMopRepeat by viewModel.supportsVacuumThenMopRepeat.collectAsState()
     val supportsCleanEfficiency by viewModel.supportsCleanEfficiency.collectAsState()
     val supportsPetSearch by viewModel.supportsPetSearch.collectAsState()
+    val unsupportedCommands by viewModel.repository.unsupportedCommands.collectAsState()
+    // Neither has a read command to ask first: each is shown until the Robot refuses it once, then
+    // hidden. Find my pet hides then even when the Feature Report claims it.
+    val showFindPet = supportsPetSearch && APP_START_PET_PATROL !in unsupportedCommands
+    val showRemote = APP_RC_START !in unsupportedCommands
     val liveMap by viewModel.repository.parsedMap.collectAsState()
     val lastKnown by viewModel.lastKnown.collectAsState()
     val lastKnownMap by viewModel.lastKnownMap.collectAsState()
@@ -387,7 +394,7 @@ fun VacuumDetailScreen(
 
     val PanelBody: @Composable (DetailPanel) -> Unit = { currentPanel ->
         when (currentPanel) {
-            DetailPanel.More -> MoreActionsSheetContent(showFindPet = supportsPetSearch, onAction = onMoreAction)
+            DetailPanel.More -> MoreActionsSheetContent(showFindPet = showFindPet, showRemote = showRemote, onAction = onMoreAction)
 
             DetailPanel.Routines -> RoutinesSheetContent(
                 state = routines,
@@ -708,7 +715,7 @@ fun VacuumDetailScreen(
                             }
                             PanelBody(headed)
                         } else {
-                            MoreActionsSheetContent(showFindPet = supportsPetSearch, onAction = onMoreAction)
+                            MoreActionsSheetContent(showFindPet = showFindPet, showRemote = showRemote, onAction = onMoreAction)
                         }
                     }
 
@@ -1560,7 +1567,7 @@ private fun ControlBar(
 private enum class MoreAction { ROOMS, ZONES, PIN_GO, REMOTE, SCHEDULE, CAMERA, DOCK, HISTORY, MAPS, EDIT_MAP, ROUTINES, FIND_PET }
 
 @Composable
-private fun MoreActionsSheetContent(showFindPet: Boolean, onAction: (MoreAction) -> Unit) {
+private fun MoreActionsSheetContent(showFindPet: Boolean, showRemote: Boolean, onAction: (MoreAction) -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1582,7 +1589,11 @@ private fun MoreActionsSheetContent(showFindPet: Boolean, onAction: (MoreAction)
             MoreActionItem(Modifier.weight(1f), Icons.Default.Place, "Pin & Go", AppColors.AccentPurple) { onAction(MoreAction.PIN_GO) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MoreActionItem(Modifier.weight(1f), Icons.Default.Gamepad, "Remote", AppColors.AccentCyan) { onAction(MoreAction.REMOTE) }
+            if (showRemote) {
+                MoreActionItem(Modifier.weight(1f), Icons.Default.Gamepad, "Remote", AppColors.AccentCyan) { onAction(MoreAction.REMOTE) }
+            } else {
+                Spacer(Modifier.weight(1f))
+            }
             MoreActionItem(Modifier.weight(1f), Icons.Default.Schedule, "Schedule", AppColors.Water) { onAction(MoreAction.SCHEDULE) }
             // Camera is hidden for now; MoreAction.CAMERA and the live view screen stay in place.
             MoreActionItem(Modifier.weight(1f), Icons.Default.Edit, "Edit map", AppColors.AccentRed) { onAction(MoreAction.EDIT_MAP) }
