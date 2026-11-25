@@ -1,0 +1,57 @@
+name: Tests
+
+# Runs on every pull request and push to master:
+# - the shared and Web App tests in headless Firefox (Compose's Skiko only loads in a browser),
+#   plus the App's Android unit tests;
+# - a compile of the iOS framework, which only a Mac can build.
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web-and-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # The Android Gradle plugin needs an SDK to configure the project, even for wasm tasks.
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+
+      - name: Web App and shared tests (headless Firefox)
+        run: ./gradlew --no-daemon :composeApp:wasmJsTest
+
+      - name: Android unit tests
+        run: ./gradlew --no-daemon :composeApp:testDebugUnitTest
+
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+
+      - name: Compile the iOS code
+        run: ./gradlew --no-daemon :composeApp:compileKotlinIosSimulatorArm64
