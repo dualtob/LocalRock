@@ -14,6 +14,11 @@ ENV NGINX_ENVSUBST_OUTPUT_DIR=/usr/share/nginx/html
 COPY web-image/default.conf /etc/nginx/conf.d/default.conf
 COPY web-image/config.json.template /etc/nginx/templates/config.json.template
 COPY composeApp/build/dist/wasmJs/productionExecutable/ /usr/share/nginx/html/
+# Gzipped copies for gzip_static (default.conf), made once here instead of on every request; the
+# originals stay for clients without gzip. No .json: config.json is rendered at start, and a
+# stale config.json.gz would be served in its place.
+RUN find /usr/share/nginx/html -type f \( -name '*.wasm' -o -name '*.js' -o -name '*.html' -o -name '*.webmanifest' \) \
+        -exec sh -c 'for f; do gzip -9 -c "$f" > "$f.gz"; done' sh {} +
 
 LABEL org.opencontainers.image.source=https://github.com/dualtob/LocalRock
 LABEL org.opencontainers.image.description="LocalRock Web App"
