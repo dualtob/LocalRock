@@ -3,6 +3,11 @@ package com.kodraliu.localrock.shared.mqtt
 import com.kodraliu.localrock.shared.vacuum.LinkLostException
 import com.kodraliu.localrock.shared.vacuum.VacuumSession
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.Dispatchers
@@ -146,6 +151,51 @@ class MqttClientLinkTest {
                 }
             }
         } finally {
+            session.close()
+            client.disconnect()
+        }
+    }
+
+    @Test
+    fun a_request_sent_on_the_new_link_survives_a_late_look_at_the_drop() = runTest {
+        val transport = DroppableTransport()
+        val client = MqttClient(transport, initialBackoffMs = 10)
+        // The link watcher runs only when told to, so it can look at the drop late, as it may in real life.
+        val watcher = StandardTestDispatcher()
+        val watcherScope = CoroutineScope(SupervisorJob() + watcher)
+        val session = VacuumSession(
+            localKey = "0123456789abcdef",
+            mqtt = client,
+            topicsProvider = { MqttTopics(publishTopic = "rr/m/i/x/y/duid", subscribeTopic = "rr/m/o/x/y/duid") },
+            nowEpochSeconds = { 1_800_000_000 },
+            scope = watcherScope,
+        )
+        try {
+            client.start(creds, clientId = "test")
+            client.connected.first { it }
+            session.start()
+            withContext(Dispatchers.Default) {
+                supervisorScope {
+                    transport.drop()
+                    withTimeout(5_000) {
+                        client.linkDrops.first { it == 1 }
+                        while (transport.opens < 2) delay(10)
+                        client.connected.first { it }
+                    }
+                    // Registered and sent on the new link, before the watcher has seen the drop.
+                    val request = async { session.sendCommand("get_status", timeoutMs = 60_000) }
+                    withTimeout(5_000) { transport.published.await() }
+                    watcher.scheduler.runCurrent()
+                    // Before, the watcher failed it as lost along with the old link's requests.
+                    assertNull(withTimeoutOrNull(300) { request.join() })
+                    assertTrue(request.isActive)
+                    request.cancel()
+                }
+            }
+        } finally {
+            // Let the watcher's coroutines finish here, so close() doesn't wait on a dispatcher no one runs.
+            watcherScope.cancel()
+            watcher.scheduler.runCurrent()
             session.close()
             client.disconnect()
         }
