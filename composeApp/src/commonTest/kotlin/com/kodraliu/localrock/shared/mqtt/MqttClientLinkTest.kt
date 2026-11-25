@@ -30,6 +30,8 @@ class MqttClientLinkTest {
     private class DroppableTransport(private val answersPings: Boolean? = null) : MqttNativeTransport {
         var opens = 0
         val published = CompletableDeferred<Unit>()
+        /** Pings sent and not yet answered or cancelled: each one holds a listener on the real client. */
+        var pendingPings = 0
         private var onDisconnected: (() -> Unit)? = null
 
         fun drop() = onDisconnected?.invoke()
@@ -58,10 +60,14 @@ class MqttClientLinkTest {
                     published.complete(Unit)
                 }
                 override fun close() {}
-                override fun ping(onAnswer: () -> Unit): Boolean {
-                    val answers = answersPings ?: return false
-                    if (answers) onAnswer()
-                    return true
+                override fun ping(onAnswer: () -> Unit): MqttPing? {
+                    val answers = answersPings ?: return null
+                    if (answers) {
+                        onAnswer()
+                        return MqttPing {}
+                    }
+                    pendingPings++
+                    return MqttPing { pendingPings-- }
                 }
             }
         }
@@ -192,6 +198,24 @@ class MqttClientLinkTest {
             } finally {
                 client.disconnect()
             }
+        }
+    }
+
+    @Test
+    fun a_link_check_that_times_out_stops_waiting_for_the_answer() = runTest {
+        val transport = DroppableTransport(answersPings = false)
+        val client = MqttClient(transport)
+        try {
+            client.start(creds, clientId = "test")
+            client.connected.first { it }
+            repeat(3) {
+                // Real time: the timeout runs outside runTest's virtual clock.
+                assertEquals(false, withContext(Dispatchers.Default) { client.checkLink(timeoutMs = 50) })
+            }
+            // Before, every unanswered ping left its listener on the client for good.
+            assertEquals(0, transport.pendingPings)
+        } finally {
+            client.disconnect()
         }
     }
 

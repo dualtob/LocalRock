@@ -193,18 +193,26 @@ class MqttClient(
         val c = mutex.withLock { conn }
         if (c == null || !c.isConnected) return false
         val answered = CompletableDeferred<Unit>()
-        val sent = withContext(Dispatchers.Default) {
+        var failed = false
+        val ping = withContext(Dispatchers.Default) {
             try {
                 ioMutex.withLock { c.ping { answered.complete(Unit) } }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
                 println("[VacLocal] MQTT ping failed: ${e.message}")
+                failed = true
                 null
             }
-        } ?: return false
-        if (!sent) return null
-        return withTimeoutOrNull(timeoutMs) { answered.await() } != null
+        }
+        if (failed) return false
+        if (ping == null) return null
+        return try {
+            withTimeoutOrNull(timeoutMs) { answered.await() } != null
+        } finally {
+            // Answered or not, stop listening: an unanswered ping left its listener on the client.
+            ping.cancel()
+        }
     }
 
     suspend fun forceReconnect() {

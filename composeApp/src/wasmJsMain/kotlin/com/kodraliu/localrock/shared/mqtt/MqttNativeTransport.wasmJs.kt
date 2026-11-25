@@ -80,10 +80,10 @@ private class MqttJsConnection(private val client: MqttJsClient) : MqttNativeCon
         client.end(true)
     }
 
-    override fun ping(onAnswer: () -> Unit): Boolean {
-        whenPingAnswered(client, onAnswer)
+    override fun ping(onAnswer: () -> Unit): MqttPing {
+        val stopListening = whenPingAnswered(client, onAnswer)
         client.sendPing()
-        return true
+        return MqttPing { callRemover(stopListening) }
     }
 }
 
@@ -125,8 +125,11 @@ private fun whenErrored(client: MqttJsClient, listener: (String) -> Unit): Unit 
 private fun whenClosed(client: MqttJsClient, listener: () -> Unit): Unit =
     js("{ client.on('close', () => listener()); }")
 
-/** Calls [listener] once, on the broker's next answer to a ping. */
-private fun whenPingAnswered(client: MqttJsClient, listener: () -> Unit): Unit =
+/**
+ * Calls [listener] once, on the broker's next answer to a ping. Returns a JS function that removes
+ * the listener, for when no answer comes.
+ */
+private fun whenPingAnswered(client: MqttJsClient, listener: () -> Unit): JsAny =
     js("""{
         const onPacket = (packet) => {
             if (packet && packet.cmd === 'pingresp') {
@@ -135,7 +138,10 @@ private fun whenPingAnswered(client: MqttJsClient, listener: () -> Unit): Unit =
             }
         };
         client.on('packetreceive', onPacket);
+        return () => client.removeListener('packetreceive', onPacket);
     }""")
+
+private fun callRemover(remove: JsAny): Unit = js("{ remove(); }")
 
 private fun whenMessage(client: MqttJsClient, listener: (String, JsAny) -> Unit): Unit =
     js("{ client.on('message', (topic, payload) => listener(topic, payload)); }")
