@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -42,6 +43,15 @@ class MqttClient(
 
     private val _connected = MutableStateFlow(false)
     val connected: StateFlow<Boolean> = _connected
+
+    private val _linkDrops = MutableStateFlow(0)
+
+    /**
+     * Counts links that were up and then ended, forced or not. Anything still waiting for an answer
+     * when it changes never gets one: the broker forgets a clean session's messages with the link.
+     * A count rather than [connected], which can go false and true again faster than a collector looks.
+     */
+    val linkDrops: StateFlow<Int> = _linkDrops
 
     private val mutex = Mutex()
 
@@ -205,6 +215,7 @@ class MqttClient(
             val connectResult = CompletableDeferred<Unit>()
             val disconnected = CompletableDeferred<Unit>()
             var c: MqttNativeConnection? = null
+            var wasUp = false
             try {
                 // transport.open may open the socket synchronously and throw, so keep it in the try.
                 c = transport.open(
@@ -242,6 +253,7 @@ class MqttClient(
                     ?: throw MqttClientException("MQTT connect timed out after ${p.connectTimeoutMs} ms")
 
                 _connected.value = true
+                wasUp = true
                 backoffMs = initialBackoffMs
                 failedAttempts = 0
                 println("[VacLocal] MQTT connected host=${p.creds.host}:${p.creds.port} user=${p.creds.username}")
@@ -273,6 +285,10 @@ class MqttClient(
                 }
             } finally {
                 val closing = c
+                if (wasUp) {
+                    _connected.value = false
+                    _linkDrops.update { it + 1 }
+                }
                 mutex.withLock {
                     if (conn === closing) conn = null
                     if (currentDisconnect === disconnected) currentDisconnect = null
