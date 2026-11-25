@@ -87,10 +87,14 @@ for wasm in $wasms; do
 done
 
 # The page and script name the hashed files, so a browser revalidates them on every launch.
-for path in "" localrock.js; do
+# sw.js too: a browser only takes a new service worker it fetched afresh, and refuses to register
+# one that isn't served as JavaScript.
+for path in "" localrock.js sw.js; do
   headers=$(response_headers "$base/$path")
   has_header "$headers" cache-control no-cache || fail "/$path is not served with Cache-Control: no-cache"
 done
+type=$(curl -fsS -o /dev/null -w '%{content_type}' "$base/sw.js") || fail "/sw.js is not served"
+[[ $type == application/javascript* || $type == text/javascript* ]] || fail "/sw.js is served as '$type', not JavaScript"
 
 expect_type "$base/config.json" application/json
 got=$(curl -fsS "$base/config.json" | jq -er '.serverUrl') || fail "/config.json has no serverUrl"
