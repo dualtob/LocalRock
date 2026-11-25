@@ -6,6 +6,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -117,14 +118,16 @@ class MqttClientLinkTest {
             client.start(creds, clientId = "test")
             client.connected.first { it }
             session.start()
-            withContext(Dispatchers.Default) {
+            // A supervisor scope, so the request's failure reaches the assertion instead of
+            // cancelling the test.
+            withContext(Dispatchers.Default) { supervisorScope {
                 // The robot never answers; before, this sat out its whole minute.
                 val request = async { session.sendCommand("get_status", timeoutMs = 60_000) }
                 withTimeout(5_000) { transport.published.await() }
                 transport.drop()
                 val failure = withTimeout(5_000) { assertFailsWith<LinkLostException> { request.await() } }
                 assertEquals("get_status", failure.method)
-            }
+            } }
         } finally {
             session.close()
             client.disconnect()
