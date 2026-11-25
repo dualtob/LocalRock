@@ -110,7 +110,12 @@ class AppContainer(
     @Volatile
     private var inForeground = false
 
+    /** When the app last went to the background, in wall-clock seconds (the phone may sleep meanwhile). */
+    @Volatile
+    private var backgroundedAtSeconds: Long? = null
+
     fun setForeground(value: Boolean) {
+        if (inForeground && !value) backgroundedAtSeconds = currentEpochSeconds()
         inForeground = value
     }
 
@@ -210,6 +215,12 @@ class AppContainer(
 
     /** How long an open-but-silent link may sit before a foreground reconnect is worth it. */
     private val FOREGROUND_STALE_MS = 90_000L
+
+    /** Away for longer than this, and the link is checked on return: a phone may have cut it meanwhile. */
+    private val AWAY_CHECK_AFTER_SECONDS = 5L
+
+    /** How long the broker gets to answer that check before the link is renewed. */
+    private val LINK_CHECK_TIMEOUT_MS = 3_000L
 
     /** Start the MQTT supervisor for the signed-in session, without waiting for the broker. */
     private suspend fun startMqtt() {
@@ -314,15 +325,31 @@ class AppContainer(
     /**
      * Coming back to the foreground used to tear down the MQTT session unconditionally, costing a
      * reconnect and a data gap every time the app was switched away from. Only do it when the link
-     * looks genuinely stuck: reported down, or open but silent for a long time.
+     * looks genuinely stuck: reported down, not answering a ping after the app was away for a while,
+     * or (where the transport can't ping) open but silent for a long time.
      */
     suspend fun onEnterForeground() {
+        val awaySeconds = backgroundedAtSeconds?.let { currentEpochSeconds() - it } ?: 0L
+        backgroundedAtSeconds = null
         if (!mqttStarted) return
         if (!mqttClient.connected.value) {
             // The supervisor is already reconnecting, but may be minutes into its backoff from
             // when the screen was off and the network asleep. Now is a good moment to try.
             mqttClient.retryNow()
             return
+        }
+        if (awaySeconds > AWAY_CHECK_AFTER_SECONDS) {
+            // iOS often hands a resumed Web App a socket that looks open and is dead. A ping
+            // tells in a moment, where waiting for silence took a minute and more.
+            when (mqttClient.checkLink(LINK_CHECK_TIMEOUT_MS)) {
+                true -> return
+                false -> {
+                    println("[VacLocal] foreground: away ${awaySeconds}s and the broker didn't answer a ping — reconnecting")
+                    mqttClient.forceReconnect()
+                    return
+                }
+                null -> Unit
+            }
         }
         val silentMs = mqttClient.millisSinceLastMessage()
         if (silentMs < FOREGROUND_STALE_MS) return

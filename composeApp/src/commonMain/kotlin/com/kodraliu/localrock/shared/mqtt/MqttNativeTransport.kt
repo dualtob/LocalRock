@@ -7,6 +7,12 @@ interface MqttNativeConnection {
     fun unsubscribe(topic: String)
     fun publish(topic: String, payload: ByteArray, qos: Int, retain: Boolean)
     fun close()
+
+    /**
+     * Sends the broker a ping and calls [onAnswer] when it answers, or returns false when this
+     * transport can't ping. It proves the link is alive without involving any robot.
+     */
+    fun ping(onAnswer: () -> Unit): Boolean = false
 }
 
 
