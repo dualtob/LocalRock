@@ -50,6 +50,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import kotlin.concurrent.Volatile
 
 
 class VacuumRepository(
@@ -295,6 +296,9 @@ class VacuumRepository(
         dpsJob?.cancel(); dpsJob = null
         mapPollJob?.cancel(); mapPollJob = null
         floorSwitchRefreshJob?.cancel(); floorSwitchRefreshJob = null
+        // The live map is fetched in the repository's scope, so cancelling the poll doesn't end it.
+        // Cancelled, it leaves mapLoad IDLE rather than LOADING for good.
+        liveMapFetch?.cancel()
         scope.launch { session.close() }
     }
 
@@ -1343,6 +1347,9 @@ class VacuumRepository(
     private val mapFetchMutex = Mutex()
     private val liveMapFetchLock = Mutex()
     private var liveMapFetch: Deferred<MapResponse>? = null
+    /** Counts live-map fetches started; one given up leaves [mapLoad] alone once a newer one has started. */
+    @Volatile
+    private var liveMapFetchCount = 0
 
     /**
      * The live map. Serialised because the poll loop and the user's refresh button both call this,
@@ -1357,8 +1364,9 @@ class VacuumRepository(
             if (running != null && running.isActive && !restart) {
                 running
             } else {
+                val number = ++liveMapFetchCount
                 running?.cancel()
-                scope.async { mapFetchMutex.withLock { fetchMapLocked() } }.also { liveMapFetch = it }
+                scope.async { mapFetchMutex.withLock { fetchMapLocked(number) } }.also { liveMapFetch = it }
             }
         }
         return fetch.await()
@@ -1400,7 +1408,8 @@ class VacuumRepository(
         }
     }
 
-    private suspend fun fetchMapLocked(): MapResponse {
+    /** [number] is this fetch's place in [liveMapFetchCount]. */
+    private suspend fun fetchMapLocked(number: Int): MapResponse {
         if (demo) {
             _mapStatus.value = "Demo mode — live map unavailable"
             return MapResponse(requestId = 0, data = ByteArray(0))
@@ -1442,7 +1451,9 @@ class VacuumRepository(
             _mapLoad.value = MapLoad.IDLE
             return resp
         } catch (e: CancellationException) {
-            // Given up for a fresh request (see fetchMap's restart), which sets the load state itself.
+            // Given up for a fresh request (see fetchMap's restart), which sets the load state
+            // itself, or by a detach, after which nothing is loading any more.
+            if (number == liveMapFetchCount) _mapLoad.value = MapLoad.IDLE
             throw e
         } catch (e: Throwable) {
             _mapStatus.value = "failed: ${e::class.simpleName}: ${e.message ?: "(no message)"}"

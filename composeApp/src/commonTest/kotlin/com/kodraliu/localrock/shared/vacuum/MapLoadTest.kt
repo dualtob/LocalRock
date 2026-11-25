@@ -97,6 +97,25 @@ class MapLoadTest {
     }
 
     @Test
+    fun a_detach_while_the_map_is_on_its_way_leaves_the_load_idle() = robotTest(mapTimeoutMs = LONG_MAP_TIMEOUT_MS) {
+        withholdMap()
+
+        supervisorScope {
+            val fetch = async { repository.fetchMap() }
+            awaitMapRequests(1)
+            awaitMapLoad(MapLoad.LOADING)
+
+            repository.detach()
+
+            // Well before the request's own timeout: the detach ended it. Before, it stayed LOADING.
+            withTimeout(LONG_MAP_TIMEOUT_MS / 2) { repository.mapLoad.first { it == MapLoad.IDLE } }
+            assertFailsWith<CancellationException> { fetch.await() }
+        }
+
+        assertEquals(1, mapRequests)
+    }
+
+    @Test
     fun a_second_request_without_restart_waits_for_the_one_on_its_way() = robotTest(mapTimeoutMs = RETRY_MAP_TIMEOUT_MS) {
         withholdMap()
 
