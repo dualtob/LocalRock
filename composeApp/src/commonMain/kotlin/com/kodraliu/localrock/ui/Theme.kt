@@ -10,6 +10,13 @@ import androidx.compose.ui.graphics.Color
 @Composable
 expect fun platformDynamicColorScheme(useDark: Boolean): ColorScheme?
 
+/**
+ * Whether the device is in dark mode, for the System theme. On the phones this is Compose's own
+ * answer; the Web App needs more, since iOS doesn't always tell a home-screen app of the change.
+ */
+@Composable
+expect fun systemInDarkTheme(): Boolean
+
 /** The app's colours, light or dark: the platform's dynamic colours where it has them, else the brand palette. */
 @Composable
 fun appColorScheme(useDark: Boolean): ColorScheme =
