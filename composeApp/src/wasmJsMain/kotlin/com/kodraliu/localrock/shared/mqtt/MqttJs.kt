@@ -14,4 +14,5 @@ internal external interface MqttJsClient : JsAny {
     fun unsubscribe(topic: String): MqttJsClient
     fun publish(topic: String, message: JsAny, options: JsAny): MqttJsClient
     fun end(force: Boolean): MqttJsClient
+    fun sendPing()
 }

@@ -18,10 +18,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import com.kodraliu.localrock.shared.http.currentEpochSeconds
 import kotlin.concurrent.Volatile
 import kotlin.coroutines.coroutineContext
-import kotlin.time.TimeMark
-import kotlin.time.TimeSource
 
 data class MqttMessage(val topic: String, val payload: ByteArray) {
     override fun equals(other: Any?): Boolean =
@@ -36,6 +35,13 @@ class MqttClient(
     private val transport: MqttNativeTransport,
     /** The first wait between attempts; tests shorten it so retries take milliseconds. */
     private val initialBackoffMs: Long = INITIAL_BACKOFF_MS,
+    /** How long a [credentialRefresher] call may take before the next attempt goes ahead without it. */
+    private val credentialRefreshTimeoutMs: Long = CREDENTIAL_REFRESH_TIMEOUT_MS,
+    /**
+     * Wall-clock milliseconds. Not a monotonic clock: on a phone that one stops while the device
+     * sleeps, so a link that died with the screen locked looked only seconds silent on return.
+     */
+    private val nowMs: () -> Long = { currentEpochSeconds() * 1000L },
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val _messages = MutableSharedFlow<MqttMessage>(extraBufferCapacity = 64)
@@ -74,7 +80,7 @@ class MqttClient(
     var credentialRefresher: (suspend (attempt: Int, error: Throwable) -> MqttCreds?)? = null
 
     @Volatile
-    private var lastMessageMark: TimeMark? = null
+    private var lastMessageAtMs: Long? = null
 
     /**
      * Milliseconds since anything was last received, or [Long.MAX_VALUE] if nothing ever was.
@@ -82,7 +88,7 @@ class MqttClient(
      * genuinely dead link from one that is merely slow.
      */
     fun millisSinceLastMessage(): Long =
-        lastMessageMark?.elapsedNow()?.inWholeMilliseconds ?: Long.MAX_VALUE
+        lastMessageAtMs?.let { (nowMs() - it).coerceAtLeast(0) } ?: Long.MAX_VALUE
 
     private var currentDisconnect: CompletableDeferred<Unit>? = null
 
@@ -179,6 +185,28 @@ class MqttClient(
     }
 
 
+    /**
+     * Whether the broker answers a ping within [timeoutMs]: true if it did, false if it didn't or
+     * the link is down, null if this platform's transport can't ping (then nothing is known).
+     */
+    suspend fun checkLink(timeoutMs: Long): Boolean? {
+        val c = mutex.withLock { conn }
+        if (c == null || !c.isConnected) return false
+        val answered = CompletableDeferred<Unit>()
+        val sent = withContext(Dispatchers.Default) {
+            try {
+                ioMutex.withLock { c.ping { answered.complete(Unit) } }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                println("[VacLocal] MQTT ping failed: ${e.message}")
+                null
+            }
+        } ?: return false
+        if (!sent) return null
+        return withTimeoutOrNull(timeoutMs) { answered.await() } != null
+    }
+
     suspend fun forceReconnect() {
         val (c, d) = mutex.withLock {
             if (!_connected.value) return
@@ -234,7 +262,7 @@ class MqttClient(
                         if (!disconnected.isCompleted) disconnected.complete(Unit)
                     },
                     onMessage = { topic, payload ->
-                        lastMessageMark = TimeSource.Monotonic.markNow()
+                        lastMessageAtMs = nowMs()
                         _messages.tryEmit(MqttMessage(topic, payload))
                     },
                     onDisconnected = {
@@ -271,7 +299,12 @@ class MqttClient(
                 // The server mints a fresh session per login and rejects credentials from an
                 // expired one, so repeated failures are more likely stale creds than a dead network.
                 if (failedAttempts >= RELOGIN_AFTER_ATTEMPTS) {
-                    val refreshed = runCatching { credentialRefresher?.invoke(failedAttempts, e) }
+                    // Bounded: a login request that never settles (seen after an iPhone resumed the
+                    // Web App) held the supervisor here for good, offline until the app was killed.
+                    val refresher = credentialRefresher
+                    val refreshed = runCatching {
+                        refresher?.let { withTimeoutOrNull(credentialRefreshTimeoutMs) { it(failedAttempts, e) } }
+                    }
                         .onFailure { println("[VacLocal] MQTT credential refresh threw: ${it.message}") }
                         .getOrNull()
                     if (refreshed != null) {
@@ -322,5 +355,6 @@ class MqttClient(
         /** Consecutive reconnect failures before asking for fresh credentials. */
         const val RELOGIN_AFTER_ATTEMPTS = 3
         const val MAX_BACKOFF_MS = 30_000L
+        const val CREDENTIAL_REFRESH_TIMEOUT_MS = 15_000L
     }
 }

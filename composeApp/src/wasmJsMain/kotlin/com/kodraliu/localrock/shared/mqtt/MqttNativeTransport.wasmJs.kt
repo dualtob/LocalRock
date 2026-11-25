@@ -79,6 +79,12 @@ private class MqttJsConnection(private val client: MqttJsClient) : MqttNativeCon
     override fun close() {
         client.end(true)
     }
+
+    override fun ping(onAnswer: () -> Unit): Boolean {
+        whenPingAnswered(client, onAnswer)
+        client.sendPing()
+        return true
+    }
 }
 
 /**
@@ -118,6 +124,18 @@ private fun whenErrored(client: MqttJsClient, listener: (String) -> Unit): Unit 
 
 private fun whenClosed(client: MqttJsClient, listener: () -> Unit): Unit =
     js("{ client.on('close', () => listener()); }")
+
+/** Calls [listener] once, on the broker's next answer to a ping. */
+private fun whenPingAnswered(client: MqttJsClient, listener: () -> Unit): Unit =
+    js("""{
+        const onPacket = (packet) => {
+            if (packet && packet.cmd === 'pingresp') {
+                client.removeListener('packetreceive', onPacket);
+                listener();
+            }
+        };
+        client.on('packetreceive', onPacket);
+    }""")
 
 private fun whenMessage(client: MqttJsClient, listener: (String, JsAny) -> Unit): Unit =
     js("{ client.on('message', (topic, payload) => listener(topic, payload)); }")
