@@ -90,4 +90,21 @@ class DockCapabilities(model: String?, featureSet: String?, newFeatureSet: Strin
         4 -> "Max"
         else -> "Unknown ($mode)"
     }
+
+    /**
+     * Which dock rows to show. A row the dock hasn't answered for is left out rather than greyed
+     * out as "Unavailable": either the dock doesn't have it, or it hasn't been heard from yet, and
+     * the row appears once it is. The washing rows also need a known dock.
+     */
+    fun dockRows(settings: DockSettings, dockType: Int?, dockStatus: Int?): DockRows {
+        val dockKnown = dockType != null && dockType != 0
+        return DockRows(
+            washFrequency = dockKnown && settings.smartWash != null && washFrequencyOptions.isNotEmpty(),
+            washMode = dockKnown && settings.washMode != null && washModes(dockType, dockStatus).isNotEmpty(),
+            autoEmpty = settings.autoEmptyMode != null && autoEmptyModes.isNotEmpty(),
+        )
+    }
 }
+
+/** The dock rows a screen shows, see [DockCapabilities.dockRows]. */
+data class DockRows(val washFrequency: Boolean, val washMode: Boolean, val autoEmpty: Boolean)

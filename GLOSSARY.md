@@ -16,6 +16,10 @@ _Avoid_: Backend, cloud, local server
 Adding a new Robot to the Server, by joining the Robot's own Wi-Fi network and handing it the Server's details. Only the App can do this.
 _Avoid_: Pairing, setup, adding a vacuum
 
+**Feature Report**:
+What a Robot says about itself when asked which features it has. It can be wrong in both directions: a Robot may claim a feature it then refuses, so only the Robot's actual answer settles whether it supports something.
+_Avoid_: Feature flags, feature set, capabilities
+
 **App**:
 The LocalRock mobile client for Android and iOS.
 _Avoid_: Mobile app, client

@@ -41,6 +41,13 @@ class VacuumException(message: String, cause: Throwable? = null) : RuntimeExcept
 /** The robot sent nothing at all for a command, not even the `["retry"]` it sends while it works. */
 class RobotSilentException(val method: String) : RuntimeException("The robot didn't answer $method")
 
+/**
+ * The link to the Server ended while a request waited for its answer. The answer can't come any
+ * more (the broker drops a clean session's messages with the link), so the request is over at once
+ * instead of sitting out its timeout; sending it again on the new link is up to the caller.
+ */
+class LinkLostException(val method: String) : RuntimeException("Link lost while waiting for $method")
+
 
 class VacuumSession(
     private val localKey: String,
@@ -63,7 +70,8 @@ class VacuumSession(
     private var nextId = random.nextInt(requestIds.first, requestIds.last + 1)
     private val pending = mutableMapOf<Int, PendingRequest>()
 
-    private class PendingRequest {
+    /** [linkDrops] is [MqttClient.linkDrops] when it was registered: only a later drop can lose it. */
+    private class PendingRequest(val method: String, val linkDrops: Int) {
         val answer = CompletableDeferred<V1Response>()
         /** Completed by the first reply of any kind, the provisional `["retry"]` included. */
         val heard = CompletableDeferred<Unit>()
@@ -74,8 +82,12 @@ class VacuumSession(
     private val _dpsUpdates = MutableStateFlow<Map<Int, JsonElement>>(emptyMap())
     val dpsUpdates: StateFlow<Map<Int, JsonElement>> = _dpsUpdates
     private var collectorJob: Job? = null
+    private var linkWatchJob: Job? = null
     private var security: SecurityData? = null
     private var pendingMap: CompletableDeferred<MapResponse>? = null
+    private var pendingMapMethod: String = "get_map_v1"
+    /** [MqttClient.linkDrops] when [pendingMap] was registered. */
+    private var pendingMapLinkDrops: Int = 0
     /** Set while [pendingMap] is a saved-map request: only the frame answering this id completes it. */
     private var pendingMapId: Int? = null
     /** Saved-map requests sent so far. A late frame for one of them must never pass for the live map. */
@@ -83,8 +95,11 @@ class VacuumSession(
     /** Photos asked for with get_photo, by request id. */
     private val pendingBlobs = mutableMapOf<Int, PendingBlob>()
 
-    /** [keys] is the RSA key pair a cipher_suite 1 request was made with, null for a plain one. */
-    private class PendingBlob(val keys: RsaKeyPair?, val result: CompletableDeferred<ByteArray>)
+    /**
+     * [keys] is the RSA key pair a cipher_suite 1 request was made with, null for a plain one.
+     * [linkDrops] is [MqttClient.linkDrops] when it was registered.
+     */
+    private class PendingBlob(val keys: RsaKeyPair?, val result: CompletableDeferred<ByteArray>, val linkDrops: Int)
 
     /** Which cipher_suite get_patrol_photo worked with on this robot, once one has. */
     private var patrolCipher: Int? = null
@@ -110,6 +125,39 @@ class VacuumSession(
                     println("[VacLocal] mqtt in (OTHER topic, ignored): ${msg.topic}")
                 }
             }
+        }
+        // Compared with the count at start rather than skipping the first value seen: a drop
+        // between here and the collector's first look must still count.
+        var drops = mqtt.linkDrops.value
+        linkWatchJob = scope.launch {
+            mqtt.linkDrops.collect { now ->
+                if (now != drops) {
+                    drops = now
+                    failEverythingWaiting(before = now)
+                }
+            }
+        }
+    }
+
+    /**
+     * Ends every request still waiting with [LinkLostException], see [MqttClient.linkDrops], but
+     * only those registered while the count was below [before]. This runs a little after the drop,
+     * so a request may meanwhile have gone out on the new link, and that one can still be answered.
+     */
+    private suspend fun failEverythingWaiting(before: Int) {
+        mutex.withLock {
+            val lostRequests = pending.values.filter { it.linkDrops < before }
+            val map = pendingMap?.takeIf { pendingMapLinkDrops < before }
+            val lostBlobs = pendingBlobs.values.filter { it.linkDrops < before }
+            if (lostRequests.isEmpty() && map == null && lostBlobs.isEmpty()) return
+            println("[VacLocal] link dropped, failing ${lostRequests.size} request(s)${if (map != null) " and the map" else ""}")
+            for (request in lostRequests) {
+                val lost = LinkLostException(request.method)
+                request.heard.completeExceptionally(lost)
+                request.answer.completeExceptionally(lost)
+            }
+            map?.completeExceptionally(LinkLostException(pendingMapMethod))
+            lostBlobs.forEach { it.result.completeExceptionally(LinkLostException("photo")) }
         }
     }
 
@@ -206,9 +254,8 @@ class VacuumSession(
                 ?: throw RoborockProtocolException("get_random_pkey did not return a public key")
         }
         val requestId = nextRequestId()
-        val pendingBlob = PendingBlob(keys, CompletableDeferred())
-        val blob = pendingBlob.result
-        mutex.withLock { pendingBlobs[requestId] = pendingBlob }
+        val blob = CompletableDeferred<ByteArray>()
+        mutex.withLock { pendingBlobs[requestId] = PendingBlob(keys, blob, mqtt.linkDrops.value) }
         try {
             val securityJson = buildJsonObject {
                 put("endpoint", security.endpoint)
@@ -233,8 +280,9 @@ class VacuumSession(
         extraInner: Map<String, JsonElement> = emptyMap(),
     ): V1Response {
         val ts = nowEpochSeconds()
-        val request = PendingRequest()
-        mutex.withLock { pending[requestId] = request }
+        val request = mutex.withLock {
+            PendingRequest(method, mqtt.linkDrops.value).also { pending[requestId] = it }
+        }
         try {
             val v1Payload = V1Envelope.encodeRequestRaw(requestId, method, params, ts, extraInner)
             val frame = RoborockCodec(localKey, prefixed = false).encode(
@@ -276,6 +324,8 @@ class VacuumSession(
         if (demo) return
         collectorJob?.cancelAndJoin()
         collectorJob = null
+        linkWatchJob?.cancelAndJoin()
+        linkWatchJob = null
         subscribedTopic?.let { runCatching { mqtt.unsubscribe(it) } }
         subscribedTopic = null
         mutex.withLock {
@@ -329,6 +379,8 @@ class VacuumSession(
         mutex.withLock {
             this.security = security
             pendingMap = deferred
+            pendingMapMethod = method
+            pendingMapLinkDrops = mqtt.linkDrops.value
             pendingMapId = if (savedMap) requestId else null
             if (savedMap) savedMapRequestIds += requestId
         }

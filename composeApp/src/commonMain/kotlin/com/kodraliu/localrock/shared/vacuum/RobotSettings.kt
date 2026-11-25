@@ -6,11 +6,16 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.intOrNull
 import kotlin.math.abs
 
+/**
+ * What the Robot answered for each setting; null until it has. A setting it never answers for (it
+ * doesn't have it, or doesn't know the command) stays null and isn't shown: a made-up default here
+ * once showed the Status LED as on for a Robot that never said so.
+ */
 data class RobotSettings(
-    val volume: Int = 50,
-    val childLock: Boolean = false,
-    val ledEnabled: Boolean = true,
-    val carpetMode: Int = 1, // set_carpet_clean_mode: 0 avoid, 1 rise (vacuum only), 2 vacuum and mop, 3 dynamic lift
+    val volume: Int? = null,
+    val childLock: Boolean? = null,
+    val ledEnabled: Boolean? = null,
+    val carpetMode: Int? = null, // set_carpet_clean_mode: 0 avoid, 1 rise (vacuum only), 2 vacuum and mop, 3 dynamic lift
 )
 
 /** The levels the volume picker offers, as change_sound_volume values (0-100). */

@@ -28,6 +28,10 @@
         @media (prefers-color-scheme: dark) {
             :root { --bg: #141218; --fg: #e6e0e9; --muted: #cac4d0; --accent: #4cdada; }
         }
+        /* Once the App runs it says which theme it shows (the Light/Dark setting can differ from the
+           system), and the page around it follows: SystemBarsAppearance in Theme.wasmJs.kt. */
+        html[data-theme="light"] { --bg: #fef7ff; --fg: #1d1b20; --muted: #49454f; --accent: #006a6a; color-scheme: light; }
+        html[data-theme="dark"] { --bg: #141218; --fg: #e6e0e9; --muted: #cac4d0; --accent: #4cdada; color-scheme: dark; }
         html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: var(--bg); color: var(--fg); }
         /* The App fills the visible part of the page: the whole window on a computer; on a phone the
            screen above Safari's toolbar (dvh), behind the notch and home indicator. Touches go to
@@ -63,6 +67,25 @@
                 document.head.appendChild(script);
             } else {
                 document.documentElement.className = "unsupported";
+            }
+            // Keeps the App's files on the phone for an instant start (sw.js). Not on localhost,
+            // where it would keep serving an old development build.
+            var local = ["localhost", "127.0.0.1", "[::1]"].indexOf(location.hostname) >= 0;
+            if ("serviceWorker" in navigator && !local) {
+                // On the first launch the page loaded its files before the worker took over, so it
+                // tells the worker which, to keep them too. Once more a little later, for files
+                // still loading at that moment.
+                navigator.serviceWorker.addEventListener("controllerchange", function () {
+                    function report() {
+                        var worker = navigator.serviceWorker.controller;
+                        if (!worker) return;
+                        var urls = performance.getEntriesByType("resource").map(function (entry) { return entry.name; });
+                        worker.postMessage({ type: "loaded", urls: urls });
+                    }
+                    report();
+                    setTimeout(report, 10000);
+                });
+                navigator.serviceWorker.register("sw.js").catch(function () {});
             }
         })();
     </script>

@@ -27,6 +27,7 @@ private const val KEY_NOTIFY_DOCK = "notify_dock"
 private const val KEY_NOTIFY_BACKGROUND = "notify_background"
 private const val KEY_NOTIFY_PROGRESS = "notify_progress"
 private const val KEY_LAST_OPENED_DUID = "last_opened_duid"
+private const val KEY_SHOW_FRAME_RATE = "show_frame_rate"
 // A three-quarter view, so a first look at the 3D map shows two faces of every wall.
 private const val DEFAULT_MAP_3D_YAW = 35f
 private const val DEFAULT_MAP_3D_TILT = 53f
@@ -86,6 +87,15 @@ class AppSettings(private val settings: Settings, private val fixedServer: Strin
         _themeMode.value = mode
     }
 
+    /** A frame-rate readout over the Web App, see FrameRateOverlay. */
+    private val _showFrameRate = MutableStateFlow(settings.getBoolean(KEY_SHOW_FRAME_RATE, false))
+    val showFrameRate: StateFlow<Boolean> = _showFrameRate.asStateFlow()
+
+    fun setShowFrameRate(value: Boolean) {
+        settings.putBoolean(KEY_SHOW_FRAME_RATE, value)
+        _showFrameRate.value = value
+    }
+
     fun setServerBaseUrl(url: String?) {
         if (fixedServer != null) return
         if (url.isNullOrBlank()) {
@@ -122,6 +132,18 @@ class AppSettings(private val settings: Settings, private val fixedServer: Strin
         _wifiSsid.value = ssid
         _wifiPassword.value = password
     }
+
+    /** Commands the Robot [duid] answered with unknown_method, see UnsupportedCommandStore. */
+    fun unsupportedCommands(duid: String): Set<String> =
+        settings.getStringOrNull(unsupportedCommandsKey(duid))
+            ?.split(',')?.filter { it.isNotBlank() }?.toSet()
+            ?: emptySet()
+
+    fun setUnsupportedCommands(duid: String, commands: Set<String>) {
+        settings.putString(unsupportedCommandsKey(duid), commands.sorted().joinToString(","))
+    }
+
+    private fun unsupportedCommandsKey(duid: String) = "unsupported_commands_$duid"
 
     /** The robot most recently opened, so a fresh launch can go straight back to it. */
     private val _lastOpenedDuid = MutableStateFlow(settings.getStringOrNull(KEY_LAST_OPENED_DUID))

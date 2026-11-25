@@ -128,6 +128,23 @@ fun SettingsScreen(onDone: () -> Unit, allowCancel: Boolean) {
                         }
                     }
                 }
+                if (container.isWebApp) {
+                    val showFrameRate by container.appSettings.showFrameRate.collectAsState()
+                    SwitchRow(
+                        "Show frame rate",
+                        "Frames per second, and how many came late",
+                        showFrameRate,
+                        container.appSettings::setShowFrameRate,
+                    )
+                    Text(
+                        "Smoother on iPhones with ProMotion: Safari keeps web apps at 60 frames per second. " +
+                            "For 120, open Settings → Apps → Safari → Advanced → Feature Flags and turn off " +
+                            "\"Prefer Page Rendering Updates near 60fps\". Low Power Mode and " +
+                            "Accessibility → Motion → Limit Frame Rate keep it at 60.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
 
                 // Not indented, to keep merges from upstream small.
                 if (SettingsSection.Connection in sections) {

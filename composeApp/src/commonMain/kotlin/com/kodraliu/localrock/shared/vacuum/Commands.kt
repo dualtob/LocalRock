@@ -75,14 +75,16 @@ suspend fun VacuumSession.findMe(): V1Response = sendCommand("find_me")
 // Qrevo Pro, firmware 02.15.26): the robot answers ["ok"] and its state goes from 8 to 23. The
 // parameter is an empty object, not an empty list, and python-roborock does not list this command
 // (it has app_empty_rinse_tank_water, a different one).
-internal const val APP_EMPTY_INBUILT_WATER_TANK = "app_empty_inbuilt_water_tank"
+const val APP_EMPTY_INBUILT_WATER_TANK = "app_empty_inbuilt_water_tank"
 
 internal val EMPTY_INBUILT_WATER_TANK_PARAMS: JsonObject = JsonObject(emptyMap())
 
 suspend fun VacuumSession.emptyInbuiltWaterTank(): V1Response =
     sendCommandRaw(APP_EMPTY_INBUILT_WATER_TANK, EMPTY_INBUILT_WATER_TANK_PARAMS)
 
-suspend fun VacuumSession.appRcStart(): V1Response = sendCommand("app_rc_start")
+const val APP_RC_START = "app_rc_start"
+
+suspend fun VacuumSession.appRcStart(): V1Response = sendCommand(APP_RC_START)
 
 suspend fun VacuumSession.appRcMove(velocity: Double, omega: Double, durationMs: Int): V1Response =
     sendCommand("app_rc_move", listOf(JsonObject(mapOf(

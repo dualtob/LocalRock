@@ -1,5 +1,8 @@
 package com.kodraliu.localrock.ui.vacuum
 
+import com.kodraliu.localrock.shared.vacuum.APP_RC_START
+import com.kodraliu.localrock.shared.vacuum.APP_EMPTY_INBUILT_WATER_TANK
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -18,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -199,6 +203,7 @@ fun VacuumSettingsScreen(
     val rooms by repository.rooms.collectAsState()
     val firmwareUpdate by viewModel.firmwareUpdate.collectAsState()
     val betaFeatures by repository.betaFeatures.collectAsState()
+    val unsupportedCommands by repository.unsupportedCommands.collectAsState()
     val betaFeaturesLoading by repository.betaFeaturesLoading.collectAsState()
     val betaFeatureDefs by viewModel.betaFeatureDefs.collectAsState()
     val unlistedFeatures by viewModel.unlistedFeatures.collectAsState()
@@ -296,7 +301,9 @@ fun VacuumSettingsScreen(
             onWashModeChange = { mode -> viewModel.run { it.setWashMode(mode) } },
             onWashFrequencyChange = { mode, minutes -> viewModel.run { it.setWashFrequency(mode, minutes) } },
             onAutoEmptyModeChange = { mode -> viewModel.run { it.setAutoEmptyMode(mode) } },
-            onEmptyWaterTank = { viewModel.run("Emptying the water tank") { it.emptyInbuiltWaterTank() } },
+            // Shown until the Robot refuses it once: there is no read command to ask first.
+            onEmptyWaterTank = if (APP_EMPTY_INBUILT_WATER_TANK in unsupportedCommands) null
+                else { { viewModel.run("Emptying the water tank") { it.emptyInbuiltWaterTank() } } },
             features = betaFeatures.inSection(FeatureSection.DOCK),
             onFeatureToggle = { id, on -> viewModel.report { it.setBetaFeature(id, on) } },
             onFeatureChoice = { id, value -> viewModel.report { it.setBetaChoice(id, value) } },
@@ -369,7 +376,10 @@ fun VacuumSettingsScreen(
 fun VacuumRemoteScreen(viewModel: VacuumViewModel, onBack: () -> Unit) {
     val repository = viewModel.repository
     val scope = rememberCoroutineScope()
-    LaunchedEffect(Unit) { runCatching { repository.startRemoteControl() } }
+    val unsupportedCommands by repository.unsupportedCommands.collectAsState()
+    // A Robot that doesn't know app_rc_start can't be driven: the error says so and the screen closes.
+    LaunchedEffect(Unit) { viewModel.run { it.startRemoteControl() } }
+    LaunchedEffect(unsupportedCommands) { if (APP_RC_START in unsupportedCommands) onBack() }
     RemoteControlScreen(
         onMove = { v, o -> scope.launch { runCatching { repository.moveRemote(v, o, 1500) } } },
         onStop = { scope.launch { runCatching { repository.stopRemoteControl() } } },
@@ -1327,7 +1337,8 @@ private fun DockSettingsScreen(
     onWashModeChange: (Int) -> Unit,
     onWashFrequencyChange: (Int, Int?) -> Unit,
     onAutoEmptyModeChange: (Int) -> Unit,
-    onEmptyWaterTank: () -> Unit,
+    /** Null when the Robot refused the command as unknown, and the row is left out. */
+    onEmptyWaterTank: (() -> Unit)?,
     features: List<BetaFeatureState>,
     onFeatureToggle: (String, Boolean) -> Unit,
     onFeatureChoice: (String, Int) -> Unit,
@@ -1350,10 +1361,10 @@ private fun DockSettingsScreen(
     val washModes = dockCapabilities.washModes(dockType, dockStatus)
     val washModeIndex = washModes.indexOfFirst { it.first == dockCapabilities.washModeCode(dockSettings.washMode, dockType) }
     val autoEmptyModes = dockCapabilities.autoEmptyModes
-    val dockKnown = dockType != null && dockType != 0
-    val washFrequencyEnabled = !busy && dockKnown && smartWash != null && washFrequencyOptions.isNotEmpty()
-    val washModeEnabled = !busy && dockKnown && dockSettings.washMode != null && washModes.isNotEmpty()
-    val autoEmptyEnabled = !busy && dockSettings.autoEmptyMode != null && autoEmptyModes.isNotEmpty()
+    val rows = dockCapabilities.dockRows(dockSettings, dockType, dockStatus)
+    val showWashFrequency = rows.washFrequency
+    val showWashMode = rows.washMode
+    val showAutoEmpty = rows.autoEmpty
     val emptyWaterTankEnabled = !busy && robotDockedAndIdle
 
     Scaffold(
@@ -1368,29 +1379,40 @@ private fun DockSettingsScreen(
     ) { padding ->
         CenteredContent {
             LazyColumn(contentPadding = padding) {
-                item {
-                    SettingRowClickable(
-                        icon = Icons.Default.WaterDrop,
-                        iconTint = AppColors.Water,
-                        title = "Mop wash frequency",
-                        subtitle = washFrequencyLabel(smartWash),
-                        enabled = washFrequencyEnabled,
-                        onClick = { dialogTarget = "wash_freq" },
-                    )
+                // Every row brings the divider above it; the first one shown skips it.
+                var first = true
+                fun LazyListScope.divider() {
+                    if (!first) item { HorizontalDivider(Modifier.padding(start = 72.dp)) }
+                    first = false
                 }
-                item { HorizontalDivider(Modifier.padding(start = 72.dp)) }
-                item {
-                    SettingRowClickable(
-                        icon = Icons.Default.WaterDrop,
-                        iconTint = AppColors.AccentCyan,
-                        title = "Washing mode",
-                        subtitle = dockCapabilities.washModeLabel(dockSettings.washMode, dockType),
-                        enabled = washModeEnabled,
-                        onClick = { dialogTarget = "wash_mode" },
-                    )
+                if (showWashFrequency) {
+                    divider()
+                    item {
+                        SettingRowClickable(
+                            icon = Icons.Default.WaterDrop,
+                            iconTint = AppColors.Water,
+                            title = "Mop wash frequency",
+                            subtitle = washFrequencyLabel(smartWash),
+                            enabled = !busy,
+                            onClick = { dialogTarget = "wash_freq" },
+                        )
+                    }
+                }
+                if (showWashMode) {
+                    divider()
+                    item {
+                        SettingRowClickable(
+                            icon = Icons.Default.WaterDrop,
+                            iconTint = AppColors.AccentCyan,
+                            title = "Washing mode",
+                            subtitle = dockCapabilities.washModeLabel(dockSettings.washMode, dockType),
+                            enabled = !busy,
+                            onClick = { dialogTarget = "wash_mode" },
+                        )
+                    }
                 }
                 dockSettings.washWaterTemperature?.let { temperature ->
-                    item { HorizontalDivider(Modifier.padding(start = 72.dp)) }
+                    divider()
                     item {
                         SettingRowClickable(
                             icon = Icons.Default.Thermostat,
@@ -1403,7 +1425,7 @@ private fun DockSettingsScreen(
                     }
                 }
                 dockSettings.mopDrying?.let { drying ->
-                    item { HorizontalDivider(Modifier.padding(start = 72.dp)) }
+                    divider()
                     item {
                         SettingRowSwitch(
                             icon = Icons.Default.Air,
@@ -1429,19 +1451,21 @@ private fun DockSettingsScreen(
                         }
                     }
                 }
-                item { HorizontalDivider(Modifier.padding(start = 72.dp)) }
-                item {
-                    SettingRowClickable(
-                        icon = Icons.Default.Delete,
-                        iconTint = AppColors.Good,
-                        title = "Auto-empty mode",
-                        subtitle = dockCapabilities.autoEmptyModeLabel(dockSettings.autoEmptyMode),
-                        enabled = autoEmptyEnabled,
-                        onClick = { dialogTarget = "auto_empty" },
-                    )
+                if (showAutoEmpty) {
+                    divider()
+                    item {
+                        SettingRowClickable(
+                            icon = Icons.Default.Delete,
+                            iconTint = AppColors.Good,
+                            title = "Auto-empty mode",
+                            subtitle = dockCapabilities.autoEmptyModeLabel(dockSettings.autoEmptyMode),
+                            enabled = !busy,
+                            onClick = { dialogTarget = "auto_empty" },
+                        )
+                    }
                 }
                 valleySettings?.let { valley ->
-                    item { HorizontalDivider(Modifier.padding(start = 72.dp)) }
+                    divider()
                     item {
                         SettingRowClickable(
                             icon = Icons.Default.Schedule,
@@ -1453,26 +1477,29 @@ private fun DockSettingsScreen(
                         )
                     }
                 }
-                item { HorizontalDivider(Modifier.padding(start = 72.dp)) }
-                item {
-                    SettingRowClickable(
-                        icon = Icons.Default.WaterDrop,
-                        iconTint = AppColors.Water,
-                        title = "Internal water tank",
-                        subtitle = "Empty through the dock",
-                        enabled = emptyWaterTankEnabled,
-                        onClick = { confirmEmptyTank = true },
-                    )
+                if (onEmptyWaterTank != null) {
+                    divider()
+                    item {
+                        SettingRowClickable(
+                            icon = Icons.Default.WaterDrop,
+                            iconTint = AppColors.Water,
+                            title = "Internal water tank",
+                            subtitle = "Empty through the dock",
+                            enabled = emptyWaterTankEnabled,
+                            onClick = { confirmEmptyTank = true },
+                        )
+                    }
                 }
-                items(features, key = { it.def.id }) { f ->
-                    HorizontalDivider(Modifier.padding(start = 72.dp))
+                val featuresFirst = first
+                itemsIndexed(features, key = { _, f -> f.def.id }) { index, f ->
+                    if (!(featuresFirst && index == 0)) HorizontalDivider(Modifier.padding(start = 72.dp))
                     FeatureToggleRow(f, onFeatureToggle, onFeatureChoice)
                 }
             }
         }
     }
 
-    if (confirmEmptyTank) {
+    if (confirmEmptyTank && onEmptyWaterTank != null) {
         AlertDialog(
             onDismissRequest = { confirmEmptyTank = false },
             title = { Text("Empty the water tank?") },
@@ -1480,7 +1507,7 @@ private fun DockSettingsScreen(
             confirmButton = {
                 TextButton(
                     enabled = emptyWaterTankEnabled,
-                    onClick = { confirmEmptyTank = false; onEmptyWaterTank() },
+                    onClick = { confirmEmptyTank = false; onEmptyWaterTank?.invoke() },
                 ) { Text("Mops removed, start") }
             },
             dismissButton = { TextButton(onClick = { confirmEmptyTank = false }) { Text("Cancel") } },
@@ -1497,7 +1524,7 @@ private fun DockSettingsScreen(
                 onWashFrequencyChange(option.mode, option.intervalMinutes)
                 dialogTarget = null
             },
-            enabled = washFrequencyEnabled,
+            enabled = !busy && showWashFrequency,
             onDismiss = { dialogTarget = null },
         )
         "wash_mode" -> SimplePickerDialog(
@@ -1505,7 +1532,7 @@ private fun DockSettingsScreen(
             options = washModes.map { it.second },
             selected = washModeIndex,
             onSelect = { onWashModeChange(washModes[it].first); dialogTarget = null },
-            enabled = washModeEnabled,
+            enabled = !busy && showWashMode,
             onDismiss = { dialogTarget = null },
         )
         "wash_temp" -> SimplePickerDialog(
@@ -1529,7 +1556,7 @@ private fun DockSettingsScreen(
             options = autoEmptyModes.map { it.second },
             selected = autoEmptyModes.indexOfFirst { it.first == dockSettings.autoEmptyMode },
             onSelect = { onAutoEmptyModeChange(autoEmptyModes[it].first); dialogTarget = null },
-            enabled = autoEmptyEnabled,
+            enabled = !busy && showAutoEmpty,
             onDismiss = { dialogTarget = null },
         )
     }
@@ -1652,7 +1679,7 @@ private fun RobotSettingsScreen(
     var findTriggered by remember { mutableStateOf(false) }
     var showVolumeDialog by remember { mutableStateOf(false) }
 
-    val volumeLabel = volumeLabel(robotSettings.volume)
+    val volume = robotSettings.volume
 
     Scaffold(
         topBar = {
@@ -1675,10 +1702,10 @@ private fun RobotSettingsScreen(
                         onClick = { onFindRobot(); findTriggered = true },
                     )
                 }
-                item { HorizontalDivider(Modifier.padding(start = 72.dp)) }
-                item {
-                    // Voice control robots keep the volume on the Voice Assistant page, as the official app does.
-                    if (onVoiceAssistant != null) {
+                // Voice control robots keep the volume on the Voice Assistant page, as the official app does.
+                if (onVoiceAssistant != null) {
+                    item { HorizontalDivider(Modifier.padding(start = 72.dp)) }
+                    item {
                         SettingRowClickable(
                             icon = Icons.Default.RecordVoiceOver,
                             iconTint = AppColors.Water,
@@ -1686,37 +1713,45 @@ private fun RobotSettingsScreen(
                             subtitle = VoiceStrings.VOICE_ASSISTANT_ENTRY,
                             onClick = onVoiceAssistant,
                         )
-                    } else {
+                    }
+                } else if (volume != null) {
+                    item { HorizontalDivider(Modifier.padding(start = 72.dp)) }
+                    item {
                         SettingRowClickable(
                             icon = Icons.AutoMirrored.Filled.VolumeUp,
                             iconTint = AppColors.Water,
                             title = "Volume",
-                            subtitle = volumeLabel,
+                            subtitle = volumeLabel(volume),
                             onClick = { showVolumeDialog = true },
                         )
                     }
                 }
-                item { HorizontalDivider(Modifier.padding(start = 72.dp)) }
-                item {
-                    SettingRowSwitch(
-                        icon = Icons.Default.Lock,
-                        iconTint = AppColors.Warn,
-                        title = "Child Lock",
-                        subtitle = if (robotSettings.childLock) "Buttons locked on robot" else "Buttons active on robot",
-                        checked = robotSettings.childLock,
-                        onCheckedChange = onChildLockChange,
-                    )
+                // Each only once the robot has answered for it: see RobotSettings.
+                robotSettings.childLock?.let { locked ->
+                    item { HorizontalDivider(Modifier.padding(start = 72.dp)) }
+                    item {
+                        SettingRowSwitch(
+                            icon = Icons.Default.Lock,
+                            iconTint = AppColors.Warn,
+                            title = "Child Lock",
+                            subtitle = if (locked) "Buttons locked on robot" else "Buttons active on robot",
+                            checked = locked,
+                            onCheckedChange = onChildLockChange,
+                        )
+                    }
                 }
-                item { HorizontalDivider(Modifier.padding(start = 72.dp)) }
-                item {
-                    SettingRowSwitch(
-                        icon = Icons.Default.Lightbulb,
-                        iconTint = AppColors.AccentYellow,
-                        title = "Status LED",
-                        subtitle = if (robotSettings.ledEnabled) "LED indicator on" else "LED indicator off",
-                        checked = robotSettings.ledEnabled,
-                        onCheckedChange = onLedChange,
-                    )
+                robotSettings.ledEnabled?.let { on ->
+                    item { HorizontalDivider(Modifier.padding(start = 72.dp)) }
+                    item {
+                        SettingRowSwitch(
+                            icon = Icons.Default.Lightbulb,
+                            iconTint = AppColors.AccentYellow,
+                            title = "Status LED",
+                            subtitle = if (on) "LED indicator on" else "LED indicator off",
+                            checked = on,
+                            onCheckedChange = onLedChange,
+                        )
+                    }
                 }
                 items(features, key = { it.def.id }) { f ->
                     HorizontalDivider(Modifier.padding(start = 72.dp))
@@ -1726,11 +1761,11 @@ private fun RobotSettingsScreen(
         }
     }
 
-    if (showVolumeDialog) {
+    if (showVolumeDialog && volume != null) {
         SimplePickerDialog(
             title = "Volume",
             options = VolumeLevels.map { it.second },
-            selected = volumeLevelIndex(robotSettings.volume),
+            selected = volumeLevelIndex(volume),
             onSelect = { onVolumeChange(VolumeLevels[it].first); showVolumeDialog = false },
             onDismiss = { showVolumeDialog = false },
         )
@@ -1858,14 +1893,14 @@ private fun FeatureSectionScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CarpetScreen(
-    carpetMode: Int,
+    carpetMode: Int?,
     features: List<BetaFeatureState>,
     onCarpetModeChange: (Int) -> Unit,
     onToggle: (String, Boolean) -> Unit,
     onBack: () -> Unit,
 ) {
     var showDialog by remember { mutableStateOf(false) }
-    val options = carpetModeOptions(carpetMode)
+    val options = carpetModeOptions(carpetMode ?: 0)
     Scaffold(
         topBar = {
             TopAppBar(
@@ -1876,14 +1911,16 @@ private fun CarpetScreen(
     ) { padding ->
         CenteredContent {
             LazyColumn(contentPadding = padding) {
-                item {
-                    SettingRowClickable(
-                        icon = Icons.Default.GridView,
-                        iconTint = AppColors.Good,
-                        title = "Carpet mode",
-                        subtitle = options.getOrElse(carpetMode) { "Mode $carpetMode" },
-                        onClick = { showDialog = true },
-                    )
+                if (carpetMode != null) {
+                    item {
+                        SettingRowClickable(
+                            icon = Icons.Default.GridView,
+                            iconTint = AppColors.Good,
+                            title = "Carpet mode",
+                            subtitle = options.getOrElse(carpetMode) { "Mode $carpetMode" },
+                            onClick = { showDialog = true },
+                        )
+                    }
                 }
                 items(features, key = { it.def.id }) { f ->
                     HorizontalDivider(Modifier.padding(start = 72.dp))
@@ -1892,7 +1929,7 @@ private fun CarpetScreen(
             }
         }
     }
-    if (showDialog) {
+    if (showDialog && carpetMode != null) {
         SimplePickerDialog(
             title = "Carpet mode",
             options = options,

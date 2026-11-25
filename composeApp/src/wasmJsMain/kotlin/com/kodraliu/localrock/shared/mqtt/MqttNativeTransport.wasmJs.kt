@@ -42,7 +42,9 @@ internal class MqttJsTransport(
                 username = username,
                 password = password,
                 clientId = webPageMqttClientId(clientId, pageId),
-                keepalive = keepAliveSeconds,
+                // Short, so a link that iOS left half-open while the Web App was away is given up
+                // in about 20 s (mqtt.js gives up 1.5 keepalives after its last sign of life).
+                keepalive = minOf(keepAliveSeconds, WEB_KEEPALIVE_SECONDS),
                 connectTimeout = CONNECT_TIMEOUT_MS,
             ),
         )
@@ -55,6 +57,7 @@ internal class MqttJsTransport(
 
     private companion object {
         const val CONNECT_TIMEOUT_MS = 20_000
+        const val WEB_KEEPALIVE_SECONDS = 15
     }
 }
 
@@ -76,8 +79,19 @@ private class MqttJsConnection(private val client: MqttJsClient) : MqttNativeCon
     override fun close() {
         client.end(true)
     }
+
+    override fun ping(onAnswer: () -> Unit): MqttPing {
+        val stopListening = whenPingAnswered(client, onAnswer)
+        client.sendPing()
+        return MqttPing { callRemover(stopListening) }
+    }
 }
 
+/**
+ * `reschedulePings: false`: by default mqtt.js puts the next ping off whenever it sends a packet,
+ * and the Web App sends a status request every few seconds, so no ping ever went out and a link
+ * that iOS left half-open on resume was never noticed to be dead. Now it pings every keepalive.
+ */
 private fun connectOptions(
     username: String,
     password: String,
@@ -93,7 +107,8 @@ private fun connectOptions(
         connectTimeout: connectTimeout,
         protocolVersion: 4,
         clean: true,
-        reconnectPeriod: 0
+        reconnectPeriod: 0,
+        reschedulePings: false
     })"""
 )
 
@@ -109,6 +124,24 @@ private fun whenErrored(client: MqttJsClient, listener: (String) -> Unit): Unit 
 
 private fun whenClosed(client: MqttJsClient, listener: () -> Unit): Unit =
     js("{ client.on('close', () => listener()); }")
+
+/**
+ * Calls [listener] once, on the broker's next answer to a ping. Returns a JS function that removes
+ * the listener, for when no answer comes.
+ */
+private fun whenPingAnswered(client: MqttJsClient, listener: () -> Unit): JsAny =
+    js("""{
+        const onPacket = (packet) => {
+            if (packet && packet.cmd === 'pingresp') {
+                client.removeListener('packetreceive', onPacket);
+                listener();
+            }
+        };
+        client.on('packetreceive', onPacket);
+        return () => client.removeListener('packetreceive', onPacket);
+    }""")
+
+private fun callRemover(remove: JsAny): Unit = js("{ remove(); }")
 
 private fun whenMessage(client: MqttJsClient, listener: (String, JsAny) -> Unit): Unit =
     js("{ client.on('message', (topic, payload) => listener(topic, payload)); }")

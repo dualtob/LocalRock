@@ -38,6 +38,20 @@ expect_type() {
   [[ $got == "$type"* ]] || fail "$url is served as '$got', not $type"
 }
 
+# Prints the response headers of a GET for $1 (more curl options may follow), lower-cased and
+# without carriage returns.
+response_headers() {
+  local url=$1; shift
+  curl -fsS -o /dev/null -D - "$@" "$url" | tr -d '\r' | tr '[:upper:]' '[:lower:]' || fail "$url is not served"
+}
+
+# Succeeds if the headers in $1 hold header $2 exactly once, with the value $3 (lower case).
+# Once: nginx only inherits server-level add_header into a location that adds none, so a slip
+# there shows up as a missing or doubled header.
+has_header() {
+  [[ $(grep "^$2:" <<<"$1") == "$2: $3" ]]
+}
+
 # "no Server set" the way webAppServer reads config.json: not a JSON object, or serverUrl
 # missing, not a string, or blank.
 names_no_server() {
@@ -61,10 +75,26 @@ for icon in $icons apple-touch-icon.png apple-touch-icon-precomposed.png favicon
 done
 expect_type "$base/favicon.ico" image/
 
-wasm=$(docker exec "$container" find /usr/share/nginx/html -name '*.wasm') || fail "could not look for .wasm files in the image"
-wasm=$(head -n1 <<<"$wasm")
-[[ -n $wasm ]] || fail "the image holds no .wasm file"
-expect_type "$base/${wasm#/usr/share/nginx/html/}" application/wasm
+wasms=$(docker exec "$container" find /usr/share/nginx/html -name '*.wasm') || fail "could not look for .wasm files in the image"
+[[ -n $wasms ]] || fail "the image holds no .wasm file"
+for wasm in $wasms; do
+  path=${wasm#/usr/share/nginx/html/}
+  expect_type "$base/$path" application/wasm
+  # Content-hashed, so a browser may keep them for good; gzipped, a cold start downloads a third.
+  headers=$(response_headers "$base/$path" -H 'Accept-Encoding: gzip')
+  has_header "$headers" content-encoding gzip || fail "/$path is not served gzipped"
+  has_header "$headers" cache-control 'public, max-age=31536000, immutable' || fail "/$path is not served as immutable"
+done
+
+# The page and script name the hashed files, so a browser revalidates them on every launch.
+# sw.js too: a browser only takes a new service worker it fetched afresh, and refuses to register
+# one that isn't served as JavaScript.
+for path in "" localrock.js sw.js; do
+  headers=$(response_headers "$base/$path")
+  has_header "$headers" cache-control no-cache || fail "/$path is not served with Cache-Control: no-cache"
+done
+type=$(curl -fsS -o /dev/null -w '%{content_type}' "$base/sw.js") || fail "/sw.js is not served"
+[[ $type == application/javascript* || $type == text/javascript* ]] || fail "/sw.js is served as '$type', not JavaScript"
 
 expect_type "$base/config.json" application/json
 got=$(curl -fsS "$base/config.json" | jq -er '.serverUrl') || fail "/config.json has no serverUrl"

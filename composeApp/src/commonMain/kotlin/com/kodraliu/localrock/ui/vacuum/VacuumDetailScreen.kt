@@ -1,5 +1,7 @@
 package com.kodraliu.localrock.ui.vacuum
 
+import com.kodraliu.localrock.shared.vacuum.APP_START_PET_PATROL
+import com.kodraliu.localrock.shared.vacuum.APP_RC_START
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -163,6 +165,7 @@ import androidx.compose.ui.unit.sp
 import com.kodraliu.localrock.ui.LocalAppContainer
 import com.kodraliu.localrock.shared.model.Scene
 import com.kodraliu.localrock.shared.vacuum.DockCapabilities
+import com.kodraliu.localrock.shared.vacuum.MapLoad
 import com.kodraliu.localrock.shared.http.currentEpochSeconds
 import kotlinx.datetime.Instant
 import com.kodraliu.localrock.shared.vacuum.DockErrorCodes
@@ -241,6 +244,7 @@ fun VacuumDetailScreen(
 ) {
     val status by viewModel.status.collectAsState()
     val busy by viewModel.busy.collectAsState()
+    val mapLoad by viewModel.repository.mapLoad.collectAsState()
     val mapRotation by viewModel.mapRotation.collectAsState()
     val map3DYaw by viewModel.map3DYaw.collectAsState()
     val map3DTilt by viewModel.map3DTilt.collectAsState()
@@ -251,6 +255,11 @@ fun VacuumDetailScreen(
     val supportsVacuumThenMopRepeat by viewModel.supportsVacuumThenMopRepeat.collectAsState()
     val supportsCleanEfficiency by viewModel.supportsCleanEfficiency.collectAsState()
     val supportsPetSearch by viewModel.supportsPetSearch.collectAsState()
+    val unsupportedCommands by viewModel.repository.unsupportedCommands.collectAsState()
+    // Neither has a read command to ask first: each is shown until the Robot refuses it once, then
+    // hidden. Find my pet hides then even when the Feature Report claims it.
+    val showFindPet = supportsPetSearch && APP_START_PET_PATROL !in unsupportedCommands
+    val showRemote = APP_RC_START !in unsupportedCommands
     val liveMap by viewModel.repository.parsedMap.collectAsState()
     val lastKnown by viewModel.lastKnown.collectAsState()
     val lastKnownMap by viewModel.lastKnownMap.collectAsState()
@@ -387,7 +396,7 @@ fun VacuumDetailScreen(
 
     val PanelBody: @Composable (DetailPanel) -> Unit = { currentPanel ->
         when (currentPanel) {
-            DetailPanel.More -> MoreActionsSheetContent(showFindPet = supportsPetSearch, onAction = onMoreAction)
+            DetailPanel.More -> MoreActionsSheetContent(showFindPet = showFindPet, showRemote = showRemote, onAction = onMoreAction)
 
             DetailPanel.Routines -> RoutinesSheetContent(
                 state = routines,
@@ -650,6 +659,7 @@ fun VacuumDetailScreen(
                 parsedMap = parsedMap,
                 offlineLines = offlineLines,
                 busy = busy,
+                mapLoad = mapLoad,
                 selectedRoomIds = selectedRoomIds,
                 sessionRoomNames = sessionRoomNames,
                 floorMaps = floorMaps,
@@ -708,7 +718,7 @@ fun VacuumDetailScreen(
                             }
                             PanelBody(headed)
                         } else {
-                            MoreActionsSheetContent(showFindPet = supportsPetSearch, onAction = onMoreAction)
+                            MoreActionsSheetContent(showFindPet = showFindPet, showRemote = showRemote, onAction = onMoreAction)
                         }
                     }
 
@@ -806,6 +816,7 @@ private fun MapHeroSection(
     parsedMap: ParsedMap?,
     offlineLines: List<String>,
     busy: Boolean,
+    mapLoad: MapLoad,
     selectedRoomIds: List<Int>,
     sessionRoomNames: List<String>,
     floorMaps: List<FloorMap>,
@@ -855,7 +866,7 @@ private fun MapHeroSection(
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
-            MapEmptyState(busy = busy, onLoadMap = onLoadMap, onRecover = onRecover, modifier = Modifier.fillMaxSize())
+            MapEmptyState(mapLoad = mapLoad, onLoadMap = onLoadMap, onRecover = onRecover, modifier = Modifier.fillMaxSize())
         }
 
         // Refresh and Edit map are the only controls on top of the map; camera, remote and map
@@ -870,12 +881,12 @@ private fun MapHeroSection(
             }
         }
 
+        // Stays tappable while loading: a tap gives up the request on its way and asks afresh.
         FilledTonalIconButton(
             onClick = onLoadMap,
-            enabled = !busy,
             modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp).size(48.dp),
         ) {
-            if (busy) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+            if (mapLoad == MapLoad.LOADING) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
             else Icon(Icons.Default.Refresh, contentDescription = "Refresh map", modifier = Modifier.size(22.dp))
         }
 
@@ -1292,7 +1303,9 @@ private fun VacuumMapImage(
 }
 
 @Composable
-private fun MapEmptyState(busy: Boolean, onLoadMap: () -> Unit, onRecover: () -> Unit, modifier: Modifier = Modifier) {
+private fun MapEmptyState(mapLoad: MapLoad, onLoadMap: () -> Unit, onRecover: () -> Unit, modifier: Modifier = Modifier) {
+    val failed = mapLoad == MapLoad.FAILED
+    val loading = mapLoad == MapLoad.LOADING
     Column(
         modifier = modifier.padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1300,17 +1313,34 @@ private fun MapEmptyState(busy: Boolean, onLoadMap: () -> Unit, onRecover: () ->
     ) {
         Icon(Icons.Default.Map, null, Modifier.size(48.dp), MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(16.dp))
-        Text("No map loaded", style = MaterialTheme.typography.titleMedium)
+        Text(if (failed) "Map didn't load" else "No map loaded", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(4.dp))
-        Text("Load the latest map from your robot.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            when {
+                loading -> "Asking your robot for its map…"
+                failed -> "Your robot didn't send its map. Check that it's on and connected, then try again."
+                else -> "Load the latest map from your robot."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
         Spacer(Modifier.height(20.dp))
-        Button(onClick = onLoadMap, enabled = !busy) {
-            Icon(Icons.Default.Refresh, null)
+        // Tappable while loading too: it gives up the request on its way and asks afresh.
+        Button(onClick = onLoadMap) {
+            if (loading) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = LocalContentColor.current)
+            else Icon(Icons.Default.Refresh, null)
             Spacer(Modifier.width(8.dp))
-            Text(if (busy) "Loading…" else "Load map")
+            Text(
+                when {
+                    failed -> "Retry"
+                    loading -> "Ask again"
+                    else -> "Load map"
+                },
+            )
         }
         Spacer(Modifier.height(4.dp))
-        TextButton(onClick = onRecover, enabled = !busy) {
+        TextButton(onClick = onRecover) {
             Text("Saved maps")
         }
     }
@@ -1560,7 +1590,7 @@ private fun ControlBar(
 private enum class MoreAction { ROOMS, ZONES, PIN_GO, REMOTE, SCHEDULE, CAMERA, DOCK, HISTORY, MAPS, EDIT_MAP, ROUTINES, FIND_PET }
 
 @Composable
-private fun MoreActionsSheetContent(showFindPet: Boolean, onAction: (MoreAction) -> Unit) {
+private fun MoreActionsSheetContent(showFindPet: Boolean, showRemote: Boolean, onAction: (MoreAction) -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1582,7 +1612,11 @@ private fun MoreActionsSheetContent(showFindPet: Boolean, onAction: (MoreAction)
             MoreActionItem(Modifier.weight(1f), Icons.Default.Place, "Pin & Go", AppColors.AccentPurple) { onAction(MoreAction.PIN_GO) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MoreActionItem(Modifier.weight(1f), Icons.Default.Gamepad, "Remote", AppColors.AccentCyan) { onAction(MoreAction.REMOTE) }
+            if (showRemote) {
+                MoreActionItem(Modifier.weight(1f), Icons.Default.Gamepad, "Remote", AppColors.AccentCyan) { onAction(MoreAction.REMOTE) }
+            } else {
+                Spacer(Modifier.weight(1f))
+            }
             MoreActionItem(Modifier.weight(1f), Icons.Default.Schedule, "Schedule", AppColors.Water) { onAction(MoreAction.SCHEDULE) }
             // Camera is hidden for now; MoreAction.CAMERA and the live view screen stay in place.
             MoreActionItem(Modifier.weight(1f), Icons.Default.Edit, "Edit map", AppColors.AccentRed) { onAction(MoreAction.EDIT_MAP) }
@@ -2148,17 +2182,28 @@ private fun DockSettingsTab(
     val washModes = dockCapabilities.washModes(dockType, dockStatus)
     val washModeIndex = washModes.indexOfFirst { it.first == dockCapabilities.washModeCode(dockSettings.washMode, dockType) }
     val autoEmptyModes = dockCapabilities.autoEmptyModes
-    val dockKnown = dockType != null && dockType != 0
-    val washFrequencyEnabled = !busy && dockKnown && smartWash != null && washFrequencyOptions.isNotEmpty()
-    val washModeEnabled = !busy && dockKnown && dockSettings.washMode != null && washModes.isNotEmpty()
-    val autoEmptyEnabled = !busy && dockSettings.autoEmptyMode != null && autoEmptyModes.isNotEmpty()
+    val rows = dockCapabilities.dockRows(dockSettings, dockType, dockStatus)
+    val showWashFrequency = rows.washFrequency
+    val showWashMode = rows.washMode
+    val showAutoEmpty = rows.autoEmpty
+    val washFrequencyEnabled = !busy && showWashFrequency
+    val washModeEnabled = !busy && showWashMode
+    val autoEmptyEnabled = !busy && showAutoEmpty
 
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            DockSettingCard(Modifier.weight(1f), Icons.Default.Repeat, AppColors.Water, "Mop wash frequency", washFrequencyLabel(smartWash), washFrequencyEnabled) { dialogTarget = "wash_freq" }
-            DockSettingCard(Modifier.weight(1f), Icons.Default.WaterDrop, AppColors.Water, "Washing mode", dockCapabilities.washModeLabel(dockSettings.washMode, dockType), washModeEnabled) { dialogTarget = "wash_mode" }
+        if (showWashFrequency || showWashMode) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (showWashFrequency) {
+                    DockSettingCard(Modifier.weight(1f), Icons.Default.Repeat, AppColors.Water, "Mop wash frequency", washFrequencyLabel(smartWash), washFrequencyEnabled) { dialogTarget = "wash_freq" }
+                }
+                if (showWashMode) {
+                    DockSettingCard(Modifier.weight(1f), Icons.Default.WaterDrop, AppColors.Water, "Washing mode", dockCapabilities.washModeLabel(dockSettings.washMode, dockType), washModeEnabled) { dialogTarget = "wash_mode" }
+                }
+            }
         }
-        DockSettingCard(Modifier.fillMaxWidth(), Icons.Default.Delete, MaterialTheme.colorScheme.primary, "Auto-empty mode", dockCapabilities.autoEmptyModeLabel(dockSettings.autoEmptyMode), autoEmptyEnabled) { dialogTarget = "auto_empty" }
+        if (showAutoEmpty) {
+            DockSettingCard(Modifier.fillMaxWidth(), Icons.Default.Delete, MaterialTheme.colorScheme.primary, "Auto-empty mode", dockCapabilities.autoEmptyModeLabel(dockSettings.autoEmptyMode), autoEmptyEnabled) { dialogTarget = "auto_empty" }
+        }
     }
 
     when (dialogTarget) {
