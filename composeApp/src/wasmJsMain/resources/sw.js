@@ -8,7 +8,7 @@
 // - Everything else (the page, localrock.js, icons, composeResources) is served from the cache
 //   and refreshed behind it: a new release is fetched during one launch and runs from the next.
 //   A new localrock.js is stored only once the .wasm it loads is stored, so that next launch
-//   works offline too. Cached .wasm that neither the newest script nor the running one loads
+//   works offline too; the page gets the script as soon as it arrives either way. Cached .wasm that neither the newest script nor the running one loads
 //   is dropped.
 // - The first launch ran before this worker existed, so installing stores the page, script,
 //   .wasm and config.json up front, and the page then reports what else it loaded until the
@@ -20,6 +20,8 @@ const WASM_PATH = /\/[0-9a-f]{20}\.wasm$/;
 const PAGE = new URL("./", self.location).href;
 const SCRIPT = new URL("localrock.js", PAGE).href;
 const CONFIG = new URL("config.json", PAGE).href;
+/** .wasm downloads on their way, by URL, so the page and the worker never fetch one twice at once. */
+const wasmOnItsWay = new Map();
 const SHELL = ["manifest.webmanifest", "favicon.ico", "favicon-16.png", "favicon-32.png",
     "apple-touch-icon.png", "apple-touch-icon-precomposed.png", "icon-192.png", "icon-512.png"];
 
@@ -109,13 +111,19 @@ async function networkFirst() {
     }
 }
 
+/** A .wasm: the stored copy, else stored now (or by the download already on its way) and served. */
 async function cacheFirst(request) {
     const cache = await caches.open(CACHE);
     const cached = await cache.match(request);
     if (cached) return cached;
-    const response = await fetch(request);
-    if (response.ok) await cache.put(request, response.clone());
-    return response;
+    try {
+        await storeWasmFile(cache, request.url);
+        const stored = await cache.match(request);
+        if (stored) return stored;
+    } catch (e) {
+        // Below, the page gets the network's own answer, error status and all.
+    }
+    return fetch(request);
 }
 
 /**
@@ -125,7 +133,7 @@ async function cacheFirst(request) {
 async function staleWhileRevalidate(event, key, refresh) {
     const cache = await caches.open(CACHE);
     const cached = await cache.match(key);
-    const refreshed = refresh(cache, cached);
+    const refreshed = refresh(cache, cached, (work) => event.waitUntil(work.catch(() => undefined)));
     if (cached) {
         event.waitUntil(refreshed.catch(() => undefined));
         return cached;
@@ -134,16 +142,21 @@ async function staleWhileRevalidate(event, key, refresh) {
 }
 
 /**
- * Fetches localrock.js, stores the .wasm it loads and only then the script, and drops cached
- * .wasm that neither it nor the script running now ([served], the cached copy) loads.
+ * Fetches localrock.js and returns it at once. Behind it, through [keepAlive], stores the .wasm it
+ * loads and only then the script, and drops cached .wasm that neither it nor the script running
+ * now ([served], the cached copy) loads. On a first launch nothing is cached, so the page waits for
+ * this answer: it must not also wait for the .wasm, nor fail when one of them does.
  */
-async function refreshScript(cache, served) {
+async function refreshScript(cache, served, keepAlive) {
     const servedText = served ? served.clone().text() : Promise.resolve("");
     const response = await fetch(SCRIPT, { cache: "no-cache" });
     if (!response.ok) return response;
-    const text = await storeWasm(cache, response.clone());
-    await cache.put(SCRIPT, response.clone());
-    await pruneWasm(cache, text + await servedText);
+    const toStore = response.clone();
+    keepAlive((async () => {
+        const text = await storeWasm(cache, toStore.clone());
+        await cache.put(SCRIPT, toStore);
+        await pruneWasm(cache, text + await servedText);
+    })());
     return response;
 }
 
@@ -162,11 +175,23 @@ async function storeWasm(cache, response) {
     await Promise.all([...names].map(async (name) => {
         const url = new URL(name, SCRIPT).href;
         if (await cache.match(url)) return;
-        const wasm = await fetch(url);
-        if (!wasm.ok) throw new Error(`${url}: ${wasm.status}`);
-        await cache.put(url, wasm);
+        await storeWasmFile(cache, url);
     }));
     return text;
+}
+
+/** Downloads and stores one .wasm, joining the download of it already on its way if there is one. */
+function storeWasmFile(cache, url) {
+    let storing = wasmOnItsWay.get(url);
+    if (!storing) {
+        storing = (async () => {
+            const wasm = await fetch(url);
+            if (!wasm.ok) throw new Error(`${url}: ${wasm.status}`);
+            await cache.put(url, wasm);
+        })().finally(() => wasmOnItsWay.delete(url));
+        wasmOnItsWay.set(url, storing);
+    }
+    return storing;
 }
 
 /** Drops cached .wasm that [scripts] don't name, so old builds don't pile up. */
