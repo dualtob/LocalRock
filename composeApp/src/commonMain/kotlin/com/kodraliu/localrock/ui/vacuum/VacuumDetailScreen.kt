@@ -2149,16 +2149,29 @@ private fun DockSettingsTab(
     val washModeIndex = washModes.indexOfFirst { it.first == dockCapabilities.washModeCode(dockSettings.washMode, dockType) }
     val autoEmptyModes = dockCapabilities.autoEmptyModes
     val dockKnown = dockType != null && dockType != 0
-    val washFrequencyEnabled = !busy && dockKnown && smartWash != null && washFrequencyOptions.isNotEmpty()
-    val washModeEnabled = !busy && dockKnown && dockSettings.washMode != null && washModes.isNotEmpty()
-    val autoEmptyEnabled = !busy && dockSettings.autoEmptyMode != null && autoEmptyModes.isNotEmpty()
+    // A setting the dock hasn't answered for is left out rather than greyed out as "Unavailable":
+    // either the dock doesn't have it, or it hasn't been heard from yet, and the card appears once it is.
+    val showWashFrequency = dockKnown && smartWash != null && washFrequencyOptions.isNotEmpty()
+    val showWashMode = dockKnown && dockSettings.washMode != null && washModes.isNotEmpty()
+    val showAutoEmpty = dockSettings.autoEmptyMode != null && autoEmptyModes.isNotEmpty()
+    val washFrequencyEnabled = !busy && showWashFrequency
+    val washModeEnabled = !busy && showWashMode
+    val autoEmptyEnabled = !busy && showAutoEmpty
 
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            DockSettingCard(Modifier.weight(1f), Icons.Default.Repeat, AppColors.Water, "Mop wash frequency", washFrequencyLabel(smartWash), washFrequencyEnabled) { dialogTarget = "wash_freq" }
-            DockSettingCard(Modifier.weight(1f), Icons.Default.WaterDrop, AppColors.Water, "Washing mode", dockCapabilities.washModeLabel(dockSettings.washMode, dockType), washModeEnabled) { dialogTarget = "wash_mode" }
+        if (showWashFrequency || showWashMode) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (showWashFrequency) {
+                    DockSettingCard(Modifier.weight(1f), Icons.Default.Repeat, AppColors.Water, "Mop wash frequency", washFrequencyLabel(smartWash), washFrequencyEnabled) { dialogTarget = "wash_freq" }
+                }
+                if (showWashMode) {
+                    DockSettingCard(Modifier.weight(1f), Icons.Default.WaterDrop, AppColors.Water, "Washing mode", dockCapabilities.washModeLabel(dockSettings.washMode, dockType), washModeEnabled) { dialogTarget = "wash_mode" }
+                }
+            }
         }
-        DockSettingCard(Modifier.fillMaxWidth(), Icons.Default.Delete, MaterialTheme.colorScheme.primary, "Auto-empty mode", dockCapabilities.autoEmptyModeLabel(dockSettings.autoEmptyMode), autoEmptyEnabled) { dialogTarget = "auto_empty" }
+        if (showAutoEmpty) {
+            DockSettingCard(Modifier.fillMaxWidth(), Icons.Default.Delete, MaterialTheme.colorScheme.primary, "Auto-empty mode", dockCapabilities.autoEmptyModeLabel(dockSettings.autoEmptyMode), autoEmptyEnabled) { dialogTarget = "auto_empty" }
+        }
     }
 
     when (dialogTarget) {
