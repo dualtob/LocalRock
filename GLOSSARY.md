@@ -27,3 +27,23 @@ _Avoid_: Mobile app, client
 **Web App**:
 The LocalRock client that runs in a browser on a computer or a phone, on the same home network as the Server, and looks nearly the same as the App. It can also be added to a phone's home screen and opened from there.
 _Avoid_: Webapp, web client, localrobot
+
+**Live View**:
+Live video from a Robot's camera, watched in the Web App or the App.
+_Avoid_: Camera, preview, video stream, remote view
+
+**Remote-view PIN**:
+The PIN, or drawn pattern, that a Robot asks for before it starts Live View.
+_Avoid_: Camera password, homesec password
+
+**Camera Activation**:
+The one-time switch, done differently on each Robot model, that lets a Robot accept Live View at all. Without it, the Robot refuses Live View even with the right Remote-view PIN.
+_Avoid_: Enabling the camera, remote viewing authorisation
+
+**Wall**:
+A real wall or other solid edge that a Robot found while mapping, shown on its map.
+_Avoid_: Wall cell, obstacle
+
+**Virtual Wall**:
+A line drawn on a Robot's map that the Robot will not cross. It is not a Wall.
+_Avoid_: Wall, barrier, no-go line

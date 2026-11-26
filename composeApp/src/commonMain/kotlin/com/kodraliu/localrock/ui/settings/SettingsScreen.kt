@@ -128,6 +128,13 @@ fun SettingsScreen(onDone: () -> Unit, allowCancel: Boolean) {
                         }
                     }
                 }
+                val showFlatMapWalls by container.appSettings.showFlatMapWalls.collectAsState()
+                SwitchRow(
+                    "Show walls on the flat map",
+                    "Off, each wall takes its room's colour",
+                    showFlatMapWalls,
+                    container.appSettings::setShowFlatMapWalls,
+                )
                 if (container.isWebApp) {
                     val showFrameRate by container.appSettings.showFrameRate.collectAsState()
                     SwitchRow(
