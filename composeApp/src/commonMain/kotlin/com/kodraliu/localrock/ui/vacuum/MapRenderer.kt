@@ -385,24 +385,19 @@ private fun drawFloor(canvas: Canvas, map: ParsedMap, palette: MapPalette, floor
         // Flip Y so the map reads with origin at the top (matches the Roborock app).
         val drawY = (h - 1 - y).toFloat()
         for (x in 0 until w) {
-            if (erased?.get(rowOff + x) == true) continue
-            val gv = grid[rowOff + x].toInt() and 0xff
-            val paint = when (gv) {
-                127, 128 -> {
-                    if (raw != null) {
-                        // The flat map has no dark wall cells: a wall is painted as the room it belongs to.
-                        val roomId = if (gv == 127) (flatWallRoom(grid, raw, w, h, x, y) ?: continue) else (raw[rowOff + x].toInt() ushr 3) and 0x1f
-                        if (roomId in zoned) continue
-                        val base = palette.rooms[slots[roomId] ?: 0]
-                        val pattern = patterns.getOrPut(roomId) {
-                            floorPattern(map.segmentMaterials[roomId], map.segmentMaterialDirections[roomId])
-                        }
-                        val floor = if (pattern == FloorPattern.NONE) base else shaded(base, textureShade(pattern, x, y))
-                        roomPaint.color = if (carpet != null && (carpet[rowOff + x].toInt() and 1) == 1) shaded(floor, carpetShade(x, y)) else floor
-                        roomPaint
-                    } else if (gv == 127) continue else floorPaint
+            val paint = when (val cell = flatCell(map, x, y, showWalls = false, floorPlanRooms = zoned)) {
+                is FlatCell.Room -> {
+                    val roomId = cell.id
+                    val base = palette.rooms[slots[roomId] ?: 0]
+                    val pattern = patterns.getOrPut(roomId) {
+                        floorPattern(map.segmentMaterials[roomId], map.segmentMaterialDirections[roomId])
+                    }
+                    val floor = if (pattern == FloorPattern.NONE) base else shaded(base, textureShade(pattern, x, y))
+                    roomPaint.color = if (carpet != null && (carpet[rowOff + x].toInt() and 1) == 1) shaded(floor, carpetShade(x, y)) else floor
+                    roomPaint
                 }
-                else -> continue
+                FlatCell.Floor -> floorPaint
+                FlatCell.None -> continue
             }
             canvas.drawRect(
                 Rect(left = x.toFloat(), top = drawY, right = (x + 1).toFloat(), bottom = drawY + 1f),
