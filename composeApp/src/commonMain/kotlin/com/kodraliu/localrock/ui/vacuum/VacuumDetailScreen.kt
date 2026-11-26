@@ -1053,7 +1053,8 @@ private fun VacuumMapImage(
     // Drawn larger than the grid so a zoomed-in view stays crisp; every length below that is measured
     // in the layers' own pixels (wall height, label lift) is in cells times this.
     val scale = remember(map) { supersampleFor(map) }
-    val (bitmap, overlayBitmap) = rememberMapLayers(map, scale)
+    // In 3D the Walls rise from the wall bitmaps, so the floor keeps its rooms' colours under them.
+    val (bitmap, overlayBitmap) = rememberMapLayers(map, scale, showWalls = !is3D)
     val darkMap = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val walls = rememberWallBitmaps(map, scale, enabled = is3D)
     val selectionBitmap = rememberSelectionBitmap(map, selectedRoomIds, scale)

@@ -73,4 +73,39 @@ class FlatCellTest {
         assertEquals(FlatCell.None, flatCell(m, 1, 0, showWalls = false, floorPlanRooms = setOf(1)))
         assertEquals(FlatCell.Room(2), flatCell(m, 2, 0, showWalls = false, floorPlanRooms = setOf(1)))
     }
+
+    @Test
+    fun a_wall_cell_is_a_wall_when_walls_are_shown() {
+        assertEquals(FlatCell.Wall, flatCell(map("2w"), 1, 0, showWalls = true))
+        assertEquals(FlatCell.Wall, flatCell(map(".w."), 1, 0, showWalls = true))
+    }
+
+    @Test
+    fun a_wall_cell_on_a_map_without_room_ids_is_a_wall_when_walls_are_shown() {
+        assertEquals(FlatCell.Wall, flatCell(map("2w", roomIds = false), 1, 0, showWalls = true))
+    }
+
+    @Test
+    fun floor_cells_do_not_change_when_walls_are_shown() {
+        assertEquals(FlatCell.Room(3), flatCell(map("3"), 0, 0, showWalls = true))
+        assertEquals(FlatCell.Floor, flatCell(map("3", roomIds = false), 0, 0, showWalls = true))
+    }
+
+    @Test
+    fun empty_and_erased_cells_are_not_painted_when_walls_are_shown() {
+        val erased = listOf(MapZone.rect(0, 0, 100, 50, ZoneKind.ERASER))
+        val m = map("1w1.", eraserZones = erased)
+        assertEquals(FlatCell.None, flatCell(m, 0, 0, showWalls = true))
+        assertEquals(FlatCell.None, flatCell(m, 1, 0, showWalls = true))
+        assertEquals(FlatCell.None, flatCell(m, 3, 0, showWalls = true))
+        assertEquals(FlatCell.None, flatCell(map("1.", roomIds = false), 1, 0, showWalls = true))
+    }
+
+    @Test
+    fun a_room_with_a_floor_plan_shape_gets_no_wall_when_walls_are_shown() {
+        val m = map("1w2")
+        assertEquals(FlatCell.None, flatCell(m, 0, 0, showWalls = true, floorPlanRooms = setOf(1)))
+        assertEquals(FlatCell.None, flatCell(m, 1, 0, showWalls = true, floorPlanRooms = setOf(1)))
+        assertEquals(FlatCell.Room(2), flatCell(m, 2, 0, showWalls = true, floorPlanRooms = setOf(1)))
+    }
 }

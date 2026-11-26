@@ -116,30 +116,40 @@ internal fun flatWallRoom(grid: ByteArray, rawIds: ByteArray, width: Int, height
 
 /** What one cell of the flat map is painted as. */
 internal sealed interface FlatCell {
-    /** The floor of room [id], in its colour, texture and carpet; a Wall cell takes its room's. */
+    /** The floor of room [id], in its colour, texture and carpet; with Walls hidden, a Wall cell takes its room's. */
     data class Room(val id: Int) : FlatCell
 
     /** Plain floor, on a map without room ids. */
     data object Floor : FlatCell
 
-    /** Not painted from the cells: empty grid, an erased cell, a Wall with no room, or a room the floor plan paints. */
+    /** A Wall, with Walls shown. */
+    data object Wall : FlatCell
+
+    /** Not painted from the cells: empty grid, an erased cell, a hidden Wall with no room, or a room the floor plan paints. */
     data object None : FlatCell
 }
 
 /**
  * What the cell at [x], [y] (grid row, not flipped) of the flat map is painted as.
- * [floorPlanRooms] are the rooms painted from their floor-plan shape, so their cells are left to it.
- * [showWalls] does not change the answer yet: a Wall cell is always painted as the room it belongs to.
+ * [floorPlanRooms] are the rooms painted from their floor-plan shape, so their cells (Walls too) are left to it.
+ * With [showWalls], a Wall cell is a [FlatCell.Wall]; without, it is painted as the room it belongs to.
  */
-@Suppress("UNUSED_PARAMETER")
 internal fun flatCell(map: ParsedMap, x: Int, y: Int, showWalls: Boolean, floorPlanRooms: Set<Int> = emptySet()): FlatCell {
     val i = y * map.width + x
     if (map.erasedCells?.get(i) == true) return FlatCell.None
     val gv = map.grid[i].toInt() and 0xff
     if (gv != 127 && gv != 128) return FlatCell.None
-    val raw = map.originalGrid ?: return if (gv == 128) FlatCell.Floor else FlatCell.None
-    // The flat map has no dark Wall cells: a Wall is painted as the room it belongs to.
-    val roomId = if (gv == 127) flatWallRoom(map.grid, raw, map.width, map.height, x, y) ?: return FlatCell.None
-    else (raw[i].toInt() ushr 3) and 0x1f
+    val raw = map.originalGrid
+    if (gv == 127) {
+        val roomId = raw?.let { flatWallRoom(map.grid, it, map.width, map.height, x, y) }
+        return when {
+            roomId != null && roomId in floorPlanRooms -> FlatCell.None
+            showWalls -> FlatCell.Wall
+            roomId != null -> FlatCell.Room(roomId)
+            else -> FlatCell.None
+        }
+    }
+    if (raw == null) return FlatCell.Floor
+    val roomId = (raw[i].toInt() ushr 3) and 0x1f
     return if (roomId in floorPlanRooms) FlatCell.None else FlatCell.Room(roomId)
 }
