@@ -108,4 +108,17 @@ class FlatCellTest {
         assertEquals(FlatCell.None, flatCell(m, 1, 0, showWalls = true, floorPlanRooms = setOf(1)))
         assertEquals(FlatCell.Room(2), flatCell(m, 2, 0, showWalls = true, floorPlanRooms = setOf(1)))
     }
+
+    @Test
+    fun a_map_with_a_floor_plan_gets_no_walls_when_walls_are_shown() {
+        // Its floor-plan lines are the Walls: a Wall cell keeps its room, or is not painted.
+        assertEquals(FlatCell.Room(2), flatCell(map("2w2"), 1, 0, showWalls = true, floorPlanRooms = setOf(1)))
+        assertEquals(FlatCell.None, flatCell(map(".w."), 1, 0, showWalls = true, floorPlanRooms = setOf(1)))
+    }
+
+    @Test
+    fun a_map_with_a_floor_plan_gets_no_walls_when_walls_are_hidden() {
+        assertEquals(FlatCell.Room(2), flatCell(map("2w2"), 1, 0, showWalls = false, floorPlanRooms = setOf(1)))
+        assertEquals(FlatCell.None, flatCell(map(".w."), 1, 0, showWalls = false, floorPlanRooms = setOf(1)))
+    }
 }
