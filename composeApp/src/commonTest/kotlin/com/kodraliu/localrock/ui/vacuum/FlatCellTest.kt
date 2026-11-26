@@ -140,4 +140,13 @@ class FlatCellTest {
         val floorPlanRooms = m.floorPlanShapes().mapTo(HashSet()) { it.segment }
         assertEquals(FlatCell.Wall, flatCell(m, 1, 0, showWalls = true, floorPlanRooms = floorPlanRooms))
     }
+
+    @Test
+    fun a_map_with_a_floor_plan_shown_as_the_scan_gets_its_walls_and_rooms_from_the_cells() {
+        // The Scan leaves the Floor Plan out, so no room is left to it: the Walls show and each room keeps its own cells.
+        val m = map("1w2", zoneLines = floorPlan)
+        val floorPlanRooms = m.floorPlanShapes(floorPlan = false).mapTo(HashSet()) { it.segment }
+        assertEquals(FlatCell.Wall, flatCell(m, 1, 0, showWalls = true, floorPlanRooms = floorPlanRooms))
+        assertEquals(FlatCell.Room(1), flatCell(m, 0, 0, showWalls = true, floorPlanRooms = floorPlanRooms))
+    }
 }

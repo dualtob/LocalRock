@@ -128,12 +128,12 @@ fun SettingsScreen(onDone: () -> Unit, allowCancel: Boolean) {
                         }
                     }
                 }
-                val showFlatMapWalls by container.appSettings.showFlatMapWalls.collectAsState()
+                val showFlatMapScan by container.appSettings.showFlatMapScan.collectAsState()
                 SwitchRow(
-                    "Show walls on the flat map",
-                    "Off, the map looks as in the Roborock app",
-                    showFlatMapWalls,
-                    container.appSettings::setShowFlatMapWalls,
+                    "Show the real scan on the flat map",
+                    "Off, rooms as tidy shapes like the Roborock app",
+                    showFlatMapScan,
+                    container.appSettings::setShowFlatMapScan,
                 )
                 if (container.isWebApp) {
                     val showFrameRate by container.appSettings.showFrameRate.collectAsState()

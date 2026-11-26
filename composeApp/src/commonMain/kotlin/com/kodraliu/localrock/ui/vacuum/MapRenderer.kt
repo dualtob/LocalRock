@@ -101,16 +101,23 @@ private val DarkPalette = MapPalette(
 /**
  * Follows whatever scheme is actually applied — including platform dynamic colour — rather than
  * the raw system setting, so the map never disagrees with the surface it sits on.
- * Walls are painted in a light grey when the "Show walls on the flat map" setting is on, and a
- * floor plan draws its Walls bold; off, a Wall takes its room's colour and a floor plan keeps the official faint lines.
+ * With [rememberShowsScan] the map is the Scan, its Walls in a light grey; off, a map with a
+ * Floor Plan (when [floorPlan] allows it) shows that, and a Wall takes its room's colour.
  */
 @Composable
 fun rememberMapBitmap(map: ParsedMap, drawRestrictions: Boolean = true, floorPlan: Boolean = true): ImageBitmap {
     val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val showWalls by LocalAppContainer.current.appSettings.showFlatMapWalls.collectAsState()
-    return remember(map, dark, drawRestrictions, floorPlan, showWalls) {
-        renderMap(map, if (dark) DarkPalette else SurfaceLightPalette, drawRestrictions, floorPlan, showWalls)
+    val scan = rememberShowsScan()
+    return remember(map, dark, drawRestrictions, floorPlan, scan) {
+        renderMap(map, if (dark) DarkPalette else SurfaceLightPalette, drawRestrictions, floorPlan && !scan, showWalls = scan)
     }
+}
+
+/** Whether flat maps show the Scan rather than the Floor Plan: the "Show the real scan on the flat map" setting. */
+@Composable
+internal fun rememberShowsScan(): Boolean {
+    val scan by LocalAppContainer.current.appSettings.showFlatMapScan.collectAsState()
+    return scan
 }
 
 /**
@@ -123,20 +130,19 @@ internal fun supersampleFor(map: ParsedMap): Int = (2400 / maxOf(map.width, map.
 /**
  * The map as (floor, overlay) at [scale] times the grid. The floor is the rooms and walls; the
  * overlay is the robot's path, zones and markers, drawn over a selected room's tint rather than
- * under it. The floor paints Walls as [rememberMapBitmap] does, except [is3D]: there the Walls rise
- * from [rememberWallBitmaps], so the floor keeps its rooms' colours under them.
+ * under it. The floor is the Scan or the Floor Plan as in [rememberMapBitmap], except [is3D]: there the
+ * Walls rise from [rememberWallBitmaps], so the floor keeps the Floor Plan and its rooms' colours under them.
  */
 @Composable
 fun rememberMapLayers(map: ParsedMap, scale: Int, is3D: Boolean): Pair<ImageBitmap, ImageBitmap> {
     val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val palette = if (dark) DarkPalette else LightPalette
-    val showFlatMapWalls by LocalAppContainer.current.appSettings.showFlatMapWalls.collectAsState()
-    val showWalls = showFlatMapWalls && !is3D
+    val scan = rememberShowsScan() && !is3D
     // A live update replaces the map object every few seconds. The floor and the zones only depend on the
     // grid, rooms and restrictions, so neither is redrawn for a robot that has merely moved; the route and
     // the markers are drawn as vectors on top.
     val floorKey = remember(map) { map.floorKey() }
-    val floor = remember(floorKey, dark, scale, showWalls) { renderFloorLayer(map, palette, scale, showWalls) }
+    val floor = remember(floorKey, dark, scale, scan) { renderFloorLayer(map, palette, scale, scan) }
     val overlay = remember(map.restrictionsKey(), dark, scale) { renderOverlayLayer(map, palette, scale) }
     return floor to overlay
 }
@@ -344,8 +350,8 @@ private inline fun renderLayer(map: ParsedMap, scale: Int, draw: (Canvas) -> Uni
     return bitmap
 }
 
-private fun renderFloorLayer(map: ParsedMap, palette: MapPalette, scale: Int, showWalls: Boolean): ImageBitmap =
-    renderLayer(map, scale) { drawFloor(it, map, palette, showWalls = showWalls, strokes = false) }
+private fun renderFloorLayer(map: ParsedMap, palette: MapPalette, scale: Int, scan: Boolean): ImageBitmap =
+    renderLayer(map, scale) { drawFloor(it, map, palette, showWalls = scan, floorPlan = !scan, strokes = false) }
 
 private fun renderOverlayLayer(map: ParsedMap, palette: MapPalette, scale: Int): ImageBitmap =
     renderLayer(map, scale) { drawOverlays(it, map, palette, drawRestrictions = true, includeRoute = false) }
@@ -440,7 +446,7 @@ private fun drawFloor(
     }
     if (shapes.isNotEmpty()) {
         canvas.restore()
-        if (strokes) drawFloorPlanStrokes(canvas, shapes, 1f / FLOOR_PLAN_BITMAP_PX_PER_CELL, floorPlanWalls(showWalls))
+        if (strokes) drawFloorPlanStrokes(canvas, shapes, 1f / FLOOR_PLAN_BITMAP_PX_PER_CELL)
         return
     }
     val outline = mapOutlinePath(map)
@@ -462,7 +468,7 @@ private fun drawFloor(
 }
 
 /** [cellsPerPx] converts the pixel widths of the look into cells: 1 / (screen pixels per cell). */
-private fun drawFloorPlanStrokes(canvas: Canvas, shapes: List<FloorPlanShape>, cellsPerPx: Float, walls: FloorPlanWalls) {
+private fun drawFloorPlanStrokes(canvas: Canvas, shapes: List<FloorPlanShape>, cellsPerPx: Float) {
     fun stroke(runs: List<FloorPlanRun>, color: Color, width: Float) {
         if (runs.isEmpty()) return
         val path = Path()
@@ -478,19 +484,19 @@ private fun drawFloorPlanStrokes(canvas: Canvas, shapes: List<FloorPlanShape>, c
             strokeJoin = StrokeJoin.Round
         })
     }
-    stroke(shapes.flatMap { it.outer }, walls.outerColor, walls.outerWidthPx)
-    stroke(shapes.flatMap { it.inner }, walls.innerColor, walls.innerWidthPx)
+    stroke(shapes.flatMap { it.outer }, FLOOR_PLAN_OUTER_COLOR, FLOOR_PLAN_OUTER_WIDTH_PX)
+    stroke(shapes.flatMap { it.inner }, FLOOR_PLAN_INNER_COLOR, FLOOR_PLAN_INNER_WIDTH_PX)
     stroke(shapes.flatMap { it.door }, FLOOR_PLAN_DOOR_COLOR, FLOOR_PLAN_DOOR_WIDTH_PX)
 }
 
 /** The floor-plan walls and doors at a constant width in screen pixels, through the map's transform, over the floor and tint. */
-internal fun DrawScope.drawFloorPlanStrokes(shapes: List<FloorPlanShape>, view: MapView, scale: Int, walls: FloorPlanWalls) {
+internal fun DrawScope.drawFloorPlanStrokes(shapes: List<FloorPlanShape>, view: MapView, scale: Int) {
     if (shapes.isEmpty()) return
     withTransform({
         transform(view.layerMatrix(0f))
         scale(scale.toFloat(), scale.toFloat(), Offset.Zero)
     }) {
-        drawFloorPlanStrokes(drawContext.canvas, shapes, 1f / (view.k * scale), walls)
+        drawFloorPlanStrokes(drawContext.canvas, shapes, 1f / (view.k * scale))
     }
 }
 
