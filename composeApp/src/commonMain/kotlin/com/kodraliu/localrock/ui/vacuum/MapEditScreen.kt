@@ -692,7 +692,8 @@ private fun EditorCanvas(
     onWallChanged: (Int, VirtualWall) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val bitmap = rememberMapBitmap(map, drawRestrictions = false, floorPlan = false)
+    val showWalls by LocalAppContainer.current.appSettings.showFlatMapWalls.collectAsState()
+    val bitmap = rememberMapBitmap(map, drawRestrictions = false, floorPlan = false, showWalls = showWalls)
     val textMeasurer = rememberTextMeasurer()
     // Where the room names were last drawn (Rooms mode only); filled while drawing.
     val labelHits = remember { mutableListOf<RoomLabelHit>() }

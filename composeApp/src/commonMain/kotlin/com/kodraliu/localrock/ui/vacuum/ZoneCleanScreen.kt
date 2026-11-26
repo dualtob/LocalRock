@@ -130,7 +130,8 @@ fun ZoneCleanScreen(
                 }
             } else {
                 val pm = parsedMap!!
-                val bitmap = rememberMapBitmap(pm, floorPlan = false)
+                val showWalls by LocalAppContainer.current.appSettings.showFlatMapWalls.collectAsState()
+                val bitmap = rememberMapBitmap(pm, floorPlan = false, showWalls = showWalls)
                 val zoneColor = MaterialTheme.colorScheme.primary
 
                 // Whole map, centred, when the map first shows or changes size. A view that only changes
