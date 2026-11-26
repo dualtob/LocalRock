@@ -1053,9 +1053,7 @@ private fun VacuumMapImage(
     // Drawn larger than the grid so a zoomed-in view stays crisp; every length below that is measured
     // in the layers' own pixels (wall height, label lift) is in cells times this.
     val scale = remember(map) { supersampleFor(map) }
-    val showWalls by LocalAppContainer.current.appSettings.showFlatMapWalls.collectAsState()
-    // In 3D the Walls rise from the wall bitmaps, so the floor keeps its rooms' colours under them.
-    val (bitmap, overlayBitmap) = rememberMapLayers(map, scale, showWalls = showWalls && !is3D)
+    val (bitmap, overlayBitmap) = rememberMapLayers(map, scale, is3D = is3D)
     val darkMap = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val walls = rememberWallBitmaps(map, scale, enabled = is3D)
     val selectionBitmap = rememberSelectionBitmap(map, selectedRoomIds, scale)
@@ -2742,8 +2740,7 @@ private fun SavedMapPreview(label: String, map: ParsedMap?, failed: Boolean, mod
 /** The floor plan of [map], cut to the part that holds floor and fitted into the space. */
 @Composable
 internal fun SavedMapImage(map: ParsedMap, modifier: Modifier = Modifier, rotationDegrees: Int = 0) {
-    val showWalls by LocalAppContainer.current.appSettings.showFlatMapWalls.collectAsState()
-    val bitmap = rememberMapBitmap(map, showWalls = showWalls)
+    val bitmap = rememberMapBitmap(map)
     val bounds = remember(map) { map.contentBoundsNorm() }
     Canvas(modifier) {
         val usable = bounds.isUsable

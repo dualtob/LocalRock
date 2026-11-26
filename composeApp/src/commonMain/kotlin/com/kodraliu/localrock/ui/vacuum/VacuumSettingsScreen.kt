@@ -2341,8 +2341,7 @@ private fun PinGoScreen(
                     }
                 }
             } else {
-                val showWalls by LocalAppContainer.current.appSettings.showFlatMapWalls.collectAsState()
-                val bitmap = rememberMapBitmap(parsedMap, showWalls = showWalls)
+                val bitmap = rememberMapBitmap(parsedMap)
                 val aspectRatio = parsedMap.width.toFloat() / parsedMap.height.toFloat()
                 Box(
                     modifier = Modifier

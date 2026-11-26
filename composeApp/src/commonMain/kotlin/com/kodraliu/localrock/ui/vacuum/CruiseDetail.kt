@@ -29,7 +29,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,7 +58,6 @@ import com.kodraliu.localrock.shared.vacuum.patrolFailureMessage
 import com.kodraliu.localrock.shared.vacuum.map.ParsedMap
 import com.kodraliu.localrock.shared.vacuum.map.PatrolPoint
 import com.kodraliu.localrock.ui.AppColors
-import com.kodraliu.localrock.ui.LocalAppContainer
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.PI
 import kotlin.math.cos
@@ -200,8 +198,7 @@ private fun CruisePointRow(
 /** The floor plan cropped and fitted as [SavedMapImage] does, with each cruise point drawn as a numbered badge. */
 @Composable
 private fun CruiseMapImage(map: ParsedMap, points: List<PatrolPoint>, modifier: Modifier, rotationDegrees: Int) {
-    val showWalls by LocalAppContainer.current.appSettings.showFlatMapWalls.collectAsState()
-    val bitmap = rememberMapBitmap(map, showWalls = showWalls)
+    val bitmap = rememberMapBitmap(map)
     val bounds = remember(map) { map.contentBoundsNorm() }
     val measurer = rememberTextMeasurer()
     val badge = MaterialTheme.colorScheme.primary

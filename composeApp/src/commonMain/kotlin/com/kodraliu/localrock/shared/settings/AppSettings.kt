@@ -97,7 +97,7 @@ class AppSettings(private val settings: Settings, private val fixedServer: Strin
         _showFrameRate.value = value
     }
 
-    /** Walls drawn as blocks on every flat map; off, a Wall takes its room's colour as in the Roborock app. */
+    /** Walls drawn as blocks on the flat map, except where a floor plan's lines already show them; off, a Wall takes its room's colour as in the Roborock app. */
     private val _showFlatMapWalls = MutableStateFlow(settings.getBoolean(KEY_SHOW_FLAT_MAP_WALLS, true))
     val showFlatMapWalls: StateFlow<Boolean> = _showFlatMapWalls.asStateFlow()
 
