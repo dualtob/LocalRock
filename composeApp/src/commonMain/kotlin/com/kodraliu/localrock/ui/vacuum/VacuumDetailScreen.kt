@@ -1057,10 +1057,9 @@ private fun VacuumMapImage(
     val darkMap = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val walls = rememberWallBitmaps(map, scale, enabled = is3D)
     val selectionBitmap = rememberSelectionBitmap(map, selectedRoomIds, scale)
-    val floorShapes = remember(map.floorKey()) { map.floorPlanShapes() }
-    val showFlatMapWalls by LocalAppContainer.current.appSettings.showFlatMapWalls.collectAsState()
-    // 3D keeps the official faint lines: its Walls rise from the wall layers instead.
-    val floorPlanWalls = floorPlanWalls(showFlatMapWalls && !is3D)
+    // 3D keeps the Floor Plan: its Walls rise from the wall layers instead.
+    val scan = rememberShowsScan() && !is3D
+    val floorShapes = remember(map.floorKey(), scan) { map.floorPlanShapes(floorPlan = !scan) }
     val wallHeight = WALL_HEIGHT_CELLS * scale
     val labelRooms = remember(map.rooms, map.eraserZones) { map.rooms.filter { it.labelNormX != null && it.labelNormY != null && it.id !in map.erasedRoomIds } }
     val textMeasurer = rememberTextMeasurer()
@@ -1087,7 +1086,7 @@ private fun VacuumMapImage(
     // The view is framed on the floor plan, once per map identity: a live update replaces the map object every
     // few seconds, and a plan that is still growing must not re-centre and rescale under the user's fingers.
     val identity = map.viewportIdentity(viewportScope)
-    val bounds = remember(identity) { map.contentBoundsNorm() }
+    val bounds = remember(identity, scan) { map.contentBoundsNorm(floorPlan = !scan) }
     val mapViewport = providedMapViewport ?: remember { LiveMapViewport() }
     LaunchedEffect(identity, is3D) { mapViewport.frameIfNeeded(identity to is3D) }
     // The gesture handlers outlive a live update, so they read the current map and view, not the ones they started with.
@@ -1184,7 +1183,7 @@ private fun VacuumMapImage(
             // A selected room is tinted over the floor, and the path goes over the tint, so the
             // choice reads at a glance without hiding where the robot has been.
             selectionBitmap?.let { drawMapLayer(it, view, 0f, quality) }
-            drawFloorPlanStrokes(floorShapes, view, scale, floorPlanWalls)
+            drawFloorPlanStrokes(floorShapes, view, scale)
             drawMapLayer(overlayBitmap, view, 0f, quality)
             drawRouteAndMarkers(map, view, scale, darkMap, faintRoute)
             if (is3D && walls != null) {
@@ -2744,7 +2743,8 @@ private fun SavedMapPreview(label: String, map: ParsedMap?, failed: Boolean, mod
 @Composable
 internal fun SavedMapImage(map: ParsedMap, modifier: Modifier = Modifier, rotationDegrees: Int = 0) {
     val bitmap = rememberMapBitmap(map)
-    val bounds = remember(map) { map.contentBoundsNorm() }
+    val scan = rememberShowsScan()
+    val bounds = remember(map, scan) { map.contentBoundsNorm(floorPlan = !scan) }
     Canvas(modifier) {
         val usable = bounds.isUsable
         val srcLeft = if (usable) bounds.left * bitmap.width else 0f

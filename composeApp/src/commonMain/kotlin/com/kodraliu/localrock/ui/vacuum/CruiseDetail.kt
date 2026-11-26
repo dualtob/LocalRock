@@ -199,7 +199,8 @@ private fun CruisePointRow(
 @Composable
 private fun CruiseMapImage(map: ParsedMap, points: List<PatrolPoint>, modifier: Modifier, rotationDegrees: Int) {
     val bitmap = rememberMapBitmap(map)
-    val bounds = remember(map) { map.contentBoundsNorm() }
+    val scan = rememberShowsScan()
+    val bounds = remember(map, scan) { map.contentBoundsNorm(floorPlan = !scan) }
     val measurer = rememberTextMeasurer()
     val badge = MaterialTheme.colorScheme.primary
     Canvas(modifier) {

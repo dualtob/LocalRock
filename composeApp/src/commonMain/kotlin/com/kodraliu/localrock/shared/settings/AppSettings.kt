@@ -28,7 +28,8 @@ private const val KEY_NOTIFY_BACKGROUND = "notify_background"
 private const val KEY_NOTIFY_PROGRESS = "notify_progress"
 private const val KEY_LAST_OPENED_DUID = "last_opened_duid"
 private const val KEY_SHOW_FRAME_RATE = "show_frame_rate"
-private const val KEY_SHOW_FLAT_MAP_WALLS = "show_flat_map_walls"
+// Named for the Walls it first switched on; kept so an earlier choice carries over.
+private const val KEY_SHOW_FLAT_MAP_SCAN = "show_flat_map_walls"
 // A three-quarter view, so a first look at the 3D map shows two faces of every wall.
 private const val DEFAULT_MAP_3D_YAW = 35f
 private const val DEFAULT_MAP_3D_TILT = 53f
@@ -97,13 +98,13 @@ class AppSettings(private val settings: Settings, private val fixedServer: Strin
         _showFrameRate.value = value
     }
 
-    /** Walls drawn as blocks on the flat map, except where a floor plan's lines already show them; off, a Wall takes its room's colour as in the Roborock app. */
-    private val _showFlatMapWalls = MutableStateFlow(settings.getBoolean(KEY_SHOW_FLAT_MAP_WALLS, true))
-    val showFlatMapWalls: StateFlow<Boolean> = _showFlatMapWalls.asStateFlow()
+    /** The flat map drawn as the Scan, with its Walls; off, a map with a Floor Plan shows that instead, and a Wall takes its room's colour, as in the Roborock app. */
+    private val _showFlatMapScan = MutableStateFlow(settings.getBoolean(KEY_SHOW_FLAT_MAP_SCAN, true))
+    val showFlatMapScan: StateFlow<Boolean> = _showFlatMapScan.asStateFlow()
 
-    fun setShowFlatMapWalls(value: Boolean) {
-        settings.putBoolean(KEY_SHOW_FLAT_MAP_WALLS, value)
-        _showFlatMapWalls.value = value
+    fun setShowFlatMapScan(value: Boolean) {
+        settings.putBoolean(KEY_SHOW_FLAT_MAP_SCAN, value)
+        _showFlatMapScan.value = value
     }
 
     fun setServerBaseUrl(url: String?) {

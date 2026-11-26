@@ -47,3 +47,11 @@ _Avoid_: Wall cell, obstacle
 **Virtual Wall**:
 A line drawn on a Robot's map that the Robot will not cross. It is not a Wall.
 _Avoid_: Wall, barrier, no-go line
+
+**Scan**:
+A Robot's map as it actually measured the home: rooms in their real shape, with Walls, furniture outlines and gaps where it could not drive.
+_Avoid_: Raw map, cell map
+
+**Floor Plan**:
+The tidy version of a Robot's map that some Robots send alongside the Scan: each room as a straight-edged shape, with outer walls, inner walls and doors marked on its edges.
+_Avoid_: Squared rooms, polygons, zone lines
