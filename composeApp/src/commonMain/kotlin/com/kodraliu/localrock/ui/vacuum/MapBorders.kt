@@ -21,6 +21,19 @@ internal const val FLOOR_PLAN_INNER_WIDTH_PX = 2.0f
 internal val FLOOR_PLAN_DOOR_COLOR = Color(0xFFF2F2F7)
 internal const val FLOOR_PLAN_DOOR_WIDTH_PX = 4.0f
 
+/** The floor plan's outer and inner Walls as one look: [FAINT] is the official app's, [BOLD] shows the Walls clearly. */
+internal class FloorPlanWalls(val outerColor: Color, val outerWidthPx: Float, val innerColor: Color, val innerWidthPx: Float) {
+    companion object {
+        val FAINT = FloorPlanWalls(FLOOR_PLAN_OUTER_COLOR, FLOOR_PLAN_OUTER_WIDTH_PX, FLOOR_PLAN_INNER_COLOR, FLOOR_PLAN_INNER_WIDTH_PX)
+
+        // The light map's slate Wall colour: dark enough to read over every official room tint in either theme.
+        val BOLD = FloorPlanWalls(Color(0xFF3A4A52), 6.0f, Color(0xFF3A4A52), 4.0f)
+    }
+}
+
+/** How a floor plan draws its Walls: bold with the "Show walls on the flat map" setting on, the official faint lines off. */
+internal fun floorPlanWalls(showWalls: Boolean): FloorPlanWalls = if (showWalls) FloorPlanWalls.BOLD else FloorPlanWalls.FAINT
+
 /** Screen pixels per cell assumed when the plan is baked into a bitmap (thumbnails), which has no zoom to follow. */
 internal const val FLOOR_PLAN_BITMAP_PX_PER_CELL = 4f
 internal const val FLOOR_PLAN_OUTER_WIDTH_CELLS = FLOOR_PLAN_OUTER_WIDTH_PX / FLOOR_PLAN_BITMAP_PX_PER_CELL

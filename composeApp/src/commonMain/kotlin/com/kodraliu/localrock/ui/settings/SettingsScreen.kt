@@ -131,7 +131,7 @@ fun SettingsScreen(onDone: () -> Unit, allowCancel: Boolean) {
                 val showFlatMapWalls by container.appSettings.showFlatMapWalls.collectAsState()
                 SwitchRow(
                     "Show walls on the flat map",
-                    "Off, each wall takes its room's colour",
+                    "Off, the map looks as in the Roborock app",
                     showFlatMapWalls,
                     container.appSettings::setShowFlatMapWalls,
                 )

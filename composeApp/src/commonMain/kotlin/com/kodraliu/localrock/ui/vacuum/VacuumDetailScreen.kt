@@ -1058,6 +1058,9 @@ private fun VacuumMapImage(
     val walls = rememberWallBitmaps(map, scale, enabled = is3D)
     val selectionBitmap = rememberSelectionBitmap(map, selectedRoomIds, scale)
     val floorShapes = remember(map.floorKey()) { map.floorPlanShapes() }
+    val showFlatMapWalls by LocalAppContainer.current.appSettings.showFlatMapWalls.collectAsState()
+    // 3D keeps the official faint lines: its Walls rise from the wall layers instead.
+    val floorPlanWalls = floorPlanWalls(showFlatMapWalls && !is3D)
     val wallHeight = WALL_HEIGHT_CELLS * scale
     val labelRooms = remember(map.rooms, map.eraserZones) { map.rooms.filter { it.labelNormX != null && it.labelNormY != null && it.id !in map.erasedRoomIds } }
     val textMeasurer = rememberTextMeasurer()
@@ -1181,7 +1184,7 @@ private fun VacuumMapImage(
             // A selected room is tinted over the floor, and the path goes over the tint, so the
             // choice reads at a glance without hiding where the robot has been.
             selectionBitmap?.let { drawMapLayer(it, view, 0f, quality) }
-            drawFloorPlanStrokes(floorShapes, view, scale)
+            drawFloorPlanStrokes(floorShapes, view, scale, floorPlanWalls)
             drawMapLayer(overlayBitmap, view, 0f, quality)
             drawRouteAndMarkers(map, view, scale, darkMap, faintRoute)
             if (is3D && walls != null) {
