@@ -101,8 +101,8 @@ private val DarkPalette = MapPalette(
 /**
  * Follows whatever scheme is actually applied — including platform dynamic colour — rather than
  * the raw system setting, so the map never disagrees with the surface it sits on.
- * Walls are painted in a light grey when the "Show walls on the flat map" setting is on; off, a
- * Wall takes its room's colour.
+ * Walls are painted in a light grey when the "Show walls on the flat map" setting is on, and a
+ * floor plan draws its Walls bold; off, a Wall takes its room's colour and a floor plan keeps the official faint lines.
  */
 @Composable
 fun rememberMapBitmap(map: ParsedMap, drawRestrictions: Boolean = true, floorPlan: Boolean = true): ImageBitmap {
@@ -440,7 +440,7 @@ private fun drawFloor(
     }
     if (shapes.isNotEmpty()) {
         canvas.restore()
-        if (strokes) drawFloorPlanStrokes(canvas, shapes, 1f / FLOOR_PLAN_BITMAP_PX_PER_CELL)
+        if (strokes) drawFloorPlanStrokes(canvas, shapes, 1f / FLOOR_PLAN_BITMAP_PX_PER_CELL, floorPlanWalls(showWalls))
         return
     }
     val outline = mapOutlinePath(map)
@@ -462,7 +462,7 @@ private fun drawFloor(
 }
 
 /** [cellsPerPx] converts the pixel widths of the look into cells: 1 / (screen pixels per cell). */
-private fun drawFloorPlanStrokes(canvas: Canvas, shapes: List<FloorPlanShape>, cellsPerPx: Float) {
+private fun drawFloorPlanStrokes(canvas: Canvas, shapes: List<FloorPlanShape>, cellsPerPx: Float, walls: FloorPlanWalls) {
     fun stroke(runs: List<FloorPlanRun>, color: Color, width: Float) {
         if (runs.isEmpty()) return
         val path = Path()
@@ -478,19 +478,19 @@ private fun drawFloorPlanStrokes(canvas: Canvas, shapes: List<FloorPlanShape>, c
             strokeJoin = StrokeJoin.Round
         })
     }
-    stroke(shapes.flatMap { it.outer }, FLOOR_PLAN_OUTER_COLOR, FLOOR_PLAN_OUTER_WIDTH_PX)
-    stroke(shapes.flatMap { it.inner }, FLOOR_PLAN_INNER_COLOR, FLOOR_PLAN_INNER_WIDTH_PX)
+    stroke(shapes.flatMap { it.outer }, walls.outerColor, walls.outerWidthPx)
+    stroke(shapes.flatMap { it.inner }, walls.innerColor, walls.innerWidthPx)
     stroke(shapes.flatMap { it.door }, FLOOR_PLAN_DOOR_COLOR, FLOOR_PLAN_DOOR_WIDTH_PX)
 }
 
 /** The floor-plan walls and doors at a constant width in screen pixels, through the map's transform, over the floor and tint. */
-internal fun DrawScope.drawFloorPlanStrokes(shapes: List<FloorPlanShape>, view: MapView, scale: Int) {
+internal fun DrawScope.drawFloorPlanStrokes(shapes: List<FloorPlanShape>, view: MapView, scale: Int, walls: FloorPlanWalls) {
     if (shapes.isEmpty()) return
     withTransform({
         transform(view.layerMatrix(0f))
         scale(scale.toFloat(), scale.toFloat(), Offset.Zero)
     }) {
-        drawFloorPlanStrokes(drawContext.canvas, shapes, 1f / (view.k * scale))
+        drawFloorPlanStrokes(drawContext.canvas, shapes, 1f / (view.k * scale), walls)
     }
 }
 

@@ -1,6 +1,7 @@
 package com.kodraliu.localrock.ui.vacuum
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import com.kodraliu.localrock.shared.vacuum.map.ParsedMap
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -40,6 +41,26 @@ class MapRendererTest {
         assertEquals(vivid.red, vivid.green)
         assertEquals(vivid.green, vivid.blue)
         assertTrue(vivid.red > 0.5f)
+    }
+
+    @Test
+    fun a_floor_plan_draws_its_walls_wider_and_darker_when_walls_are_shown() {
+        val bold = floorPlanWalls(showWalls = true)
+        val faint = floorPlanWalls(showWalls = false)
+
+        assertTrue(bold.outerWidthPx > faint.outerWidthPx && bold.innerWidthPx > faint.innerWidthPx)
+        assertTrue(bold.outerColor.luminance() < faint.outerColor.luminance())
+        assertTrue(bold.innerColor.luminance() < faint.innerColor.luminance())
+    }
+
+    @Test
+    fun a_floor_plan_keeps_the_official_faint_walls_when_walls_are_hidden() {
+        val faint = floorPlanWalls(showWalls = false)
+
+        assertEquals(FLOOR_PLAN_OUTER_COLOR, faint.outerColor)
+        assertEquals(FLOOR_PLAN_INNER_COLOR, faint.innerColor)
+        assertEquals(FLOOR_PLAN_OUTER_WIDTH_PX, faint.outerWidthPx)
+        assertEquals(FLOOR_PLAN_INNER_WIDTH_PX, faint.innerWidthPx)
     }
 
     @Test
